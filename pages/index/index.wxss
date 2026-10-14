@@ -1,0 +1,276 @@
+page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #d9cfba;
+  font-family: -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+}
+
+.stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.gl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- 抬头 ---------- */
+
+.title {
+  position: absolute;
+  left: 34rpx;
+  top: calc(24rpx + env(safe-area-inset-top));
+  pointer-events: none;
+}
+
+.title-main {
+  font-size: 46rpx;
+  font-weight: 600;
+  letter-spacing: 10rpx;
+  color: #2b2723;
+  text-shadow: 0 2rpx 10rpx rgba(255, 255, 255, 0.6);
+}
+
+.title-sub {
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: rgba(43, 39, 35, 0.62);
+  text-shadow: 0 2rpx 8rpx rgba(255, 255, 255, 0.55);
+}
+
+/* 右上角要让开胶囊按钮 */
+.fps {
+  position: absolute;
+  right: 210rpx;
+  top: calc(34rpx + env(safe-area-inset-top));
+  font-size: 19rpx;
+  color: rgba(43, 39, 35, 0.42);
+  pointer-events: none;
+}
+
+/* ---------- 营造阶段卡 ---------- */
+
+.phase {
+  position: absolute;
+  left: 34rpx;
+  right: 34rpx;
+  top: calc(140rpx + env(safe-area-inset-top));
+  padding: 20rpx 24rpx;
+  border-radius: 14rpx;
+  background: rgba(252, 248, 240, 0.9);
+  border: 1rpx solid rgba(158, 132, 96, 0.34);
+  box-shadow: 0 6rpx 24rpx rgba(60, 46, 28, 0.13);
+}
+
+.phase-name {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #8e3b26;
+  letter-spacing: 2rpx;
+}
+
+.phase-desc {
+  margin-top: 6rpx;
+  font-size: 21rpx;
+  line-height: 1.45;
+  color: rgba(43, 39, 35, 0.68);
+}
+
+.bar {
+  margin-top: 14rpx;
+  height: 6rpx;
+  border-radius: 3rpx;
+  background: rgba(158, 132, 96, 0.22);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 3rpx;
+  background: linear-gradient(90deg, #c4563a, #d99a52);
+  transition: width 0.12s linear;
+}
+
+.phase-foot {
+  margin-top: 9rpx;
+  display: flex;
+  justify-content: space-between;
+  font-size: 19rpx;
+  color: rgba(43, 39, 35, 0.5);
+}
+
+/* ---------- 泄洪读数 ---------- */
+
+.hud {
+  position: absolute;
+  left: 34rpx;
+  right: 34rpx;
+  top: calc(140rpx + env(safe-area-inset-top));
+  padding: 14rpx 10rpx;
+  border-radius: 14rpx;
+  background: rgba(22, 32, 44, 0.72);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6rpx 24rpx rgba(14, 22, 32, 0.26);
+}
+
+.hud-row {
+  display: flex;
+}
+
+.cell {
+  flex: 1;
+  text-align: center;
+}
+
+.cell-v {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #eef4f8;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-k {
+  margin-top: 2rpx;
+  font-size: 18rpx;
+  color: rgba(214, 230, 240, 0.6);
+}
+
+/* ---------- 敞肩对比 ---------- */
+
+.cmp {
+  position: absolute;
+  left: 34rpx;
+  top: calc(370rpx + env(safe-area-inset-top));
+  padding: 16rpx 22rpx;
+  border-radius: 14rpx;
+  background: rgba(252, 248, 240, 0.9);
+  border-left: 5rpx solid #c4563a;
+  box-shadow: 0 6rpx 22rpx rgba(60, 46, 28, 0.13);
+}
+
+.cmp-title {
+  font-size: 21rpx;
+  font-weight: 600;
+  color: #8e3b26;
+  margin-bottom: 8rpx;
+}
+
+.cmp-line {
+  font-size: 21rpx;
+  line-height: 1.7;
+  color: rgba(43, 39, 35, 0.7);
+}
+
+.hl {
+  color: #b8452b;
+  font-weight: 600;
+}
+
+/* ---------- 底部控制台 ---------- */
+
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16rpx 26rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-radius: 26rpx 26rpx 0 0;
+  background: rgba(252, 248, 240, 0.94);
+  box-shadow: 0 -6rpx 30rpx rgba(60, 46, 28, 0.15);
+}
+
+.tabs {
+  display: flex;
+  gap: 10rpx;
+  padding: 5rpx;
+  border-radius: 12rpx;
+  background: rgba(158, 132, 96, 0.16);
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 12rpx 0;
+  font-size: 25rpx;
+  letter-spacing: 6rpx;
+  color: rgba(43, 39, 35, 0.6);
+  border-radius: 9rpx;
+}
+
+.tab.on {
+  background: #fdfaf4;
+  color: #8e3b26;
+  font-weight: 600;
+  box-shadow: 0 2rpx 8rpx rgba(60, 46, 28, 0.12);
+}
+
+.ctrl {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-top: 10rpx;
+}
+
+.grow { flex: 1; }
+
+.lab {
+  font-size: 22rpx;
+  color: rgba(43, 39, 35, 0.62);
+  min-width: 60rpx;
+}
+
+.val {
+  font-size: 21rpx;
+  color: #3a6f9e;
+  min-width: 140rpx;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  padding: 12rpx 30rpx;
+  font-size: 24rpx;
+  border-radius: 10rpx;
+  color: #fdf6ec;
+  background: #c4563a;
+}
+
+.btn.ghost {
+  color: #8e3b26;
+  background: rgba(196, 86, 58, 0.13);
+}
+
+.views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 10rpx;
+}
+
+.chip {
+  padding: 9rpx 22rpx;
+  font-size: 22rpx;
+  border-radius: 999rpx;
+  color: rgba(43, 39, 35, 0.66);
+  background: rgba(158, 132, 96, 0.15);
+}
+
+.chip.on {
+  color: #fdf6ec;
+  background: #8e3b26;
+}
+
+.hint {
+  margin: 12rpx 4rpx 0;
+  font-size: 19rpx;
+  line-height: 1.5;
+  color: rgba(43, 39, 35, 0.46);
+}

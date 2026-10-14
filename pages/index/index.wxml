@@ -1,0 +1,128 @@
+<view class="stage">
+  <canvas
+    id="gl"
+    type="2d"
+    class="gl"
+    bindtouchstart="onTouchStart"
+    bindtouchmove="onTouchMove"
+    bindtouchend="onTouchEnd"
+    bindtouchcancel="onTouchEnd"
+  ></canvas>
+
+  <!-- 抬头 -->
+  <view class="title">
+    <view class="title-main">赵州桥</view>
+    <view class="title-sub">隋 · 大业年间 595—605 · 匠人李春</view>
+  </view>
+  <view class="fps">FPS {{fps}}</view>
+
+  <!-- 营造阶段卡 -->
+  <view class="phase" wx:if="{{mode === 'build'}}">
+    <view class="phase-name">{{phaseName}}</view>
+    <view class="phase-desc">{{phaseDesc}}</view>
+    <view class="bar"><view class="bar-fill" style="width:{{progressPct}}%"></view></view>
+    <view class="phase-foot">
+      <text>已砌 {{builtCount}} / 28 道拱券</text>
+      <text>{{progressPct}}%</text>
+    </view>
+  </view>
+
+  <!-- 泄洪读数 -->
+  <view class="hud" wx:if="{{mode === 'flood'}}">
+    <view class="hud-row">
+      <view class="cell">
+        <view class="cell-v">{{readout.h}}</view>
+        <view class="cell-k">水位 m</view>
+      </view>
+      <view class="cell">
+        <view class="cell-v">{{readout.area}}</view>
+        <view class="cell-k">过水面积 m²</view>
+      </view>
+      <view class="cell">
+        <view class="cell-v">{{readout.v}}</view>
+        <view class="cell-k">流速 m/s</view>
+      </view>
+    </view>
+    <view class="hud-row">
+      <view class="cell">
+        <view class="cell-v">{{readout.force}}</view>
+        <view class="cell-k">冲击力 kN</view>
+      </view>
+      <view class="cell">
+        <view class="cell-v">{{readout.backwater}}</view>
+        <view class="cell-k">上游壅水 m</view>
+      </view>
+      <view class="cell">
+        <view class="cell-v">{{readout.pMax}}</view>
+        <view class="cell-k">河床压强 kPa</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 敞肩 / 实肩 对比 -->
+  <view class="cmp" wx:if="{{mode === 'flood' && open}}">
+    <view class="cmp-title">敞肩之利（相对实肩拱）</view>
+    <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
+    <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
+    <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+  </view>
+
+  <!-- 底部控制台 -->
+  <view class="panel">
+    <view class="tabs">
+      <view class="tab {{mode === 'build' ? 'on' : ''}}" data-mode="build" bindtap="onTab">营 造</view>
+      <view class="tab {{mode === 'flood' ? 'on' : ''}}" data-mode="flood" bindtap="onTab">泄 洪</view>
+    </view>
+
+    <block wx:if="{{mode === 'build'}}">
+      <view class="ctrl">
+        <view class="btn" bindtap="onTogglePlay">{{playing ? '暂停' : '播放'}}</view>
+        <view class="btn ghost" bindtap="onRestart">重砌</view>
+        <slider
+          class="grow" min="0" max="1000" value="{{progressPct * 10}}"
+          block-size="14" activeColor="#c4563a" backgroundColor="#d8cfbd"
+          bindchange="onSeek" bindchanging="onSeek"
+        />
+      </view>
+      <view class="ctrl">
+        <text class="lab">速度</text>
+        <slider
+          class="grow" min="0" max="3" value="1" show-value
+          block-size="14" activeColor="#c4563a" backgroundColor="#d8cfbd"
+          bindchange="onSpeed"
+        />
+      </view>
+      <view class="views">
+        <view class="chip {{view === 'full' ? 'on' : ''}}" data-v="full" bindtap="onView">全景</view>
+        <view class="chip {{view === 'side' ? 'on' : ''}}" data-v="side" bindtap="onView">正视</view>
+        <view class="chip {{view === 'under' ? 'on' : ''}}" data-v="under" bindtap="onView">拱下</view>
+        <view class="chip {{view === 'small' ? 'on' : ''}}" data-v="small" bindtap="onView">小拱</view>
+        <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="ctrl">
+        <text class="lab">水量</text>
+        <slider
+          class="grow" min="150" max="1080" value="{{q}}"
+          block-size="14" activeColor="#3a6f9e" backgroundColor="#d8cfbd"
+          bindchange="onQ" bindchanging="onQ"
+        />
+        <text class="val">{{q}} m³/s</text>
+      </view>
+      <view class="views">
+        <view class="chip {{autoFlood ? 'on' : ''}}" bindtap="onToggleAuto">洪水过程</view>
+        <view class="chip {{open ? 'on' : ''}}" bindtap="onToggleSpandrel">
+          {{open ? '敞肩拱' : '实肩拱'}}
+        </view>
+        <view class="chip" data-v="side" bindtap="onView">正视</view>
+        <view class="chip" data-v="full" bindtap="onView">全景</view>
+        <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
+      </view>
+      <view class="hint">
+        拖动旋转，双指缩放。切到「实肩拱」即可对比没有四个小拱时的过水与受力。
+      </view>
+    </block>
+  </view>
+</view>
