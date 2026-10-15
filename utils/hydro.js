@@ -18,11 +18,15 @@ const G = 9.81
 const RHO = 1000        // kg/m³
 const V_C = 0.42        // 流速系数
 const A0 = 520          // 天然河道行洪断面面积 m²
-const H_BED = -0.5      // 河床最低标高
+const H_BED = B.BED_Y   // 河床最低标高 -1.0 m
 const H_STEP = 0.05
 const H_MAX = 12
 
-/** 桥下洞口。只在 x ≥ 0 的半边积分，用 mult 计入对称的另一半 */
+/**
+ * 桥下洞口。只在 x ≥ 0 的半边积分，用 mult 计入对称的另一半。
+ * 主拱洞：河床 → 拱腹（净跨 37.02 m）
+ * 小拱洞：起拱线 → 小拱内弧（每侧内外各一，共 4 个）
+ */
 function openings(openSpandrel) {
   const list = [{
     x0: 0,
@@ -35,9 +39,10 @@ function openings(openSpandrel) {
     for (let i = 0; i < B.SMALL.length; i++) {
       const s = B.SMALL[i]
       list.push({
-        x0: s.xc - s.a,
-        x1: s.xc + s.a,
-        bottom: function () { return s.ys },
+        x0: s.x0,
+        x1: s.x1,
+        // 洞口的下界是主拱拱背，不是一道水平的起拱线：小拱凿到拱背为止
+        bottom: function (x) { return B.haunchTop(x) },
         top: function (x) { return B.smallIntrados(s, x) },
         mult: 2
       })

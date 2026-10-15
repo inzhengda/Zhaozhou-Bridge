@@ -9,15 +9,17 @@
     bindtouchcancel="onTouchEnd"
   ></canvas>
 
-  <!-- 抬头 -->
-  <view class="title">
+  <!-- 抬头。四个顶层的 top 都由 index.js 的 measureTop() 量出来，
+       写死 rpx 会顶在状态栏和右上角胶囊按钮上 -->
+  <view class="title" style="top:{{topTitle}}px">
     <view class="title-main">赵州桥</view>
     <view class="title-sub">隋 · 大业年间 595—605 · 匠人李春</view>
   </view>
-  <view class="fps">FPS {{fps}}</view>
+  <view class="fps" style="top:{{topTitle + 6}}px">FPS {{fps}}</view>
+  <view class="src-btn" style="top:{{topBtn}}px" bindtap="onToggleSrc">数据出处</view>
 
   <!-- 营造阶段卡 -->
-  <view class="phase" wx:if="{{mode === 'build'}}">
+  <view class="phase" wx:if="{{mode === 'build'}}" style="top:{{topCard}}px">
     <view class="phase-name">{{phaseName}}</view>
     <view class="phase-desc">{{phaseDesc}}</view>
     <view class="bar"><view class="bar-fill" style="width:{{progressPct}}%"></view></view>
@@ -28,11 +30,11 @@
   </view>
 
   <!-- 泄洪读数 -->
-  <view class="hud" wx:if="{{mode === 'flood'}}">
+  <view class="hud" wx:if="{{mode === 'flood'}}" style="top:{{topCard}}px">
     <view class="hud-row">
       <view class="cell">
         <view class="cell-v">{{readout.h}}</view>
-        <view class="cell-k">水位 m</view>
+        <view class="cell-k">水位 m（起拱线上）</view>
       </view>
       <view class="cell">
         <view class="cell-v">{{readout.area}}</view>
@@ -59,12 +61,25 @@
     </view>
   </view>
 
-  <!-- 敞肩 / 实肩 对比 -->
-  <view class="cmp" wx:if="{{mode === 'flood' && open}}">
-    <view class="cmp-title">敞肩之利（相对实肩拱）</view>
-    <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
-    <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
-    <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+  <!-- 敞肩 / 实肩 对比。左栏是此刻的水力对比，右栏是四个小拱静态的
+       省料账，最后一行横跨两栏。八行竖排要 190 px 高，会压到桥面上——
+       竖屏上半只有 300 px 可用（桥顶在 390 px 上下），分两栏才收得进 -->
+  <view class="cmp" wx:if="{{mode === 'flood' && open}}" style="top:{{topCmp}}px">
+    <view class="cmp-row">
+      <view class="cmp-col">
+        <view class="cmp-title">敞肩之利（相对实肩拱）</view>
+        <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
+        <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
+        <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+      </view>
+      <view class="cmp-col">
+        <view class="cmp-title">四小拱凿掉的石方</view>
+        <view class="cmp-line">全孔断面 <text class="hl">{{sp.voidArea}} m²</text></view>
+        <view class="cmp-line">占拱肩 <text class="hl">{{sp.share}}%</text></view>
+        <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
+      </view>
+    </view>
+    <view class="cmp-line cmp-wide">此刻过水的小拱 <text class="hl">{{sp.flowing}}</text>，多走出水 <text class="hl">{{sp.nowArea}} m²</text></view>
   </view>
 
   <!-- 底部控制台 -->
@@ -97,6 +112,10 @@
         <view class="chip {{view === 'side' ? 'on' : ''}}" data-v="side" bindtap="onView">正视</view>
         <view class="chip {{view === 'under' ? 'on' : ''}}" data-v="under" bindtap="onView">拱下</view>
         <view class="chip {{view === 'small' ? 'on' : ''}}" data-v="small" bindtap="onView">小拱</view>
+        <view class="chip {{flat ? 'on' : ''}}" bindtap="onToggleFlat">坦拱对照</view>
+        <view class="chip {{split ? 'on' : ''}}" bindtap="onToggleSplit">
+          {{split ? '装回 28 券' : '拆解 28 券'}}
+        </view>
         <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
       </view>
     </block>
@@ -105,7 +124,7 @@
       <view class="ctrl">
         <text class="lab">水量</text>
         <slider
-          class="grow" min="150" max="1080" value="{{q}}"
+          class="grow" min="150" max="1300" value="{{q}}"
           block-size="14" activeColor="#3a6f9e" backgroundColor="#d8cfbd"
           bindchange="onQ" bindchanging="onQ"
         />
@@ -121,8 +140,41 @@
         <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
       </view>
       <view class="hint">
-        拖动旋转，双指缩放。切到「实肩拱」即可对比没有四个小拱时的过水与受力。
+        拖动旋转，双指缩放。水位漫过外侧小拱的券脚（3.91 m）后，那两孔先开始过水；
+        再涨到 6.05 m 才够着内侧那两孔。切到「实肩拱」即可对比没有小拱时的过水与受力。
       </view>
     </block>
+  </view>
+
+  <!-- 史料出处。必须放在最后：这一层要盖住上面的读数卡和控制台，
+       而同级绝对定位元素的叠放次序就是书写次序，写在前面就会被盖住 -->
+  <view class="src-mask" wx:if="{{srcOpen}}" bindtap="onToggleSrc"></view>
+  <view class="src" wx:if="{{srcOpen}}" style="top:{{topTitle}}px">
+    <view class="src-head">
+      <text class="src-title">尺寸数据与出处</text>
+      <text class="src-close" bindtap="onToggleSrc">关闭</text>
+    </view>
+    <view class="src-tabs">
+      <view
+        class="src-tab {{srcTab === t ? 'on' : ''}}"
+        wx:for="{{srcTabs}}" wx:for-item="t" wx:key="*this"
+        data-t="{{t}}" bindtap="onSrcTab"
+      >{{t}}</view>
+    </view>
+    <scroll-view class="src-body" scroll-y>
+      <block wx:for="{{sources}}" wx:key="g">
+        <block wx:if="{{item.tab === srcTab}}">
+          <view class="src-group">{{item.g}}</view>
+          <view class="src-row" wx:for="{{item.rows}}" wx:for-item="r" wx:key="n">
+            <text class="src-k">{{r.n}}</text>
+            <text class="src-v">{{r.v}}</text>
+          </view>
+          <view class="src-src">{{item.from}}</view>
+        </block>
+      </block>
+      <view class="src-note">
+        标【本模型】的条目是这个小程序自己算的，不是史料数字。其余均为文献值或通行数据。
+      </view>
+    </scroll-view>
   </view>
 </view>

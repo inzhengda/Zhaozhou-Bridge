@@ -122,14 +122,26 @@ function pushFace(sc, pos, faceRec, opt) {
   // 1) 变换到裁剪空间
   let cnt = 0
   let sumW = 0
+  let nw = 0                    // 落在相机前方的顶点数
+  let fTop = -1e9               // 这个面在世界里的最高点，判"是否整块没入水下"用
   for (let i = 0; i < n; i++) {
     const v = idx[i] * 3
     const x = pos[v], y = pos[v + 1], z = pos[v + 2]
+    if (y > fTop) fTop = y
     const i4 = i * 4
     sx[i4]     = m[0] * x + m[1] * y + m[2] * z + m[3]
     sx[i4 + 1] = m[4] * x + m[5] * y + m[6] * z + m[7]
     sx[i4 + 2] = m[8] * x + m[9] * y + m[10] * z + m[11]
-    sx[i4 + 3] = m[12] * x + m[13] * y + m[14] * z + m[15]
+    const w = m[12] * x + m[13] * y + m[14] * z + m[15]
+    sx[i4 + 3] = w
+    // 排序深度只累加**原本就在相机前方**的顶点，不算近平面裁出来的那几个交点。
+    //
+    // 交点全落在 w ≈ 0.25 上，谁被裁出一个交点，谁的平均深度就被拉向零，
+    // 于是"排在最近、画在最上面"。而地面和岸坡恰好是唯一会被相机站进去的东西：
+    // 脚下一格横跨上百米的土地，裁完之后平均深度只剩二三十米，反而压到了
+    // 半透明的水面之上，河面上就裂出一道道没有水的干河床，一蓝一褐交替。
+    // 只按真实顶点取平均，这些长条才会老老实实排到水面后面去。
+    if (w >= NEAR_W) { sumW += w; nw++ }
     cnt++
   }
 
@@ -165,8 +177,8 @@ function pushFace(sc, pos, faceRec, opt) {
     const iw = 1 / sy[i4 + 3]
     p[i * 2]     = sc.cx + sy[i4] * iw * sc.cx
     p[i * 2 + 1] = sc.cy - sy[i4 + 1] * iw * sc.cy
-    sumW += sy[i4 + 3]
   }
+  const depth = nw > 0 ? sumW / nw : 0
 
   // 4) 上色（opt.color 可整件覆盖基色，用于建造高亮）
   const base = opt.color || faceRec.c
@@ -184,15 +196,30 @@ function pushFace(sc, pos, faceRec, opt) {
     r *= opt.bright; g *= opt.bright; b *= opt.bright
   }
 
-  // 没入水下的面
-  if (opt.waterY !== undefined && faceRec.cy < opt.waterY) {
-    const depth = opt.waterY - faceRec.cy
+  // 没入水下的面。
+  //
+  // 判据是**整块面都没入水下**，桥体和地形一条规矩。
+  //
+  // 桥体侧墙、桥台的分条是几米高的竖板，面心在水面以下、板子却有大半露在水上；
+  // 按面心一判，整块板连水上那截一起染成水色，水线之上就浮出一排蓝方块——
+  // 泄洪时两岸看着像贴了两片塑料。
+  //
+  // 地形原本按面心判（图省事，想避免岸坡上裂出一条明暗台阶），但地形格是
+  // 十几米见方的粗格，一格从岸边一直铺到水里，面心判会把水线以上的干岸
+  // 也一并压暗，岸边就横着一条脏带子。改成整块没入才压暗之后，跨水线的
+  // 那格保持土色，水下部分交给半透明的蓝色水面去压，水线反而更利落。
+  const wet = opt.waterY !== undefined && fTop < opt.waterY
+  if (wet) {
+    const sub = opt.waterY - faceRec.cy          // 没入水下的深度
     if (opt.waterTint) {
-      // 桥体：按静水压强 p = ρg·h 做热力着色
-      let t = depth / (opt.waterDepth > 1 ? opt.waterDepth : 1)
+      // 桥体：按静水压强 p = ρg·h 做热力着色。
+      // 色带上限压到 0.78、混色比降到 0.45：河床处压强确实最大，
+      // 但把拱脚整片染成朱红会被误读成"桥要塌了"。深水处收在赭石色上，
+      // 真正刺目的红留给压强箭头——在那里红是读数，不是伤害。
+      let t = sub / (opt.waterDepth > 1 ? opt.waterDepth : 1)
       if (t > 1) t = 1
-      const col = rampAt(t)
-      const mix = 0.62
+      const col = rampAt(t * 0.78)
+      const mix = 0.45
       r += (col[0] - r) * mix
       g += (col[1] - g) * mix
       b += (col[2] - b) * mix
@@ -200,7 +227,7 @@ function pushFace(sc, pos, faceRec, opt) {
       r *= 0.88; g *= 0.92; b *= 0.96
     } else {
       // 地形：只是泡在水里，压暗即可（上色带留给桥体）
-      const f = 1 - 0.34 * Math.min(1, depth / (opt.waterDepth || 1))
+      const f = 1 - 0.34 * Math.min(1, sub / (opt.waterDepth || 1))
       r *= f; g *= f * 1.01; b *= f * 1.05
     }
   }
@@ -208,7 +235,7 @@ function pushFace(sc, pos, faceRec, opt) {
   // 远处压雾，让桥端和地形自然融进天空
   if (sc.fog) {
     const fg = sc.fog
-    let t = (sumW / out - fg.near) / (fg.far - fg.near)
+    let t = (depth - fg.near) / (fg.far - fg.near)
     if (t > 0) {
       if (t > 0.94) t = 0.94
       r += (fg.r - r) * t
@@ -219,7 +246,7 @@ function pushFace(sc, pos, faceRec, opt) {
 
   const rec = {
     p: p,
-    d: sumW / out,
+    d: depth,
     s: cssOf(r, g, b),
     a: opt.alpha || 1
   }

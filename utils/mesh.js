@@ -37,7 +37,7 @@ function vert(m, x, y, z) {
  * 压入一个面。idx 为顶点索引数组（>=3 个）。
  * 自动由绕序求法线，并预算好光照系数 face.k。
  */
-function face(m, idx, color) {
+function face(m, idx, color, flat) {
   const p = m.pos
   const a = idx[0] * 3, b = idx[1] * 3, c = idx[2] * 3
   const e1x = p[b] - p[a], e1y = p[b + 1] - p[a + 1], e1z = p[b + 2] - p[a + 2]
@@ -62,19 +62,22 @@ function face(m, idx, color) {
     c: color,
     nx, ny, nz,
     k, cy,
-    j: jitterOf(m.faces.length + 7 + seedOff)
+    // flat = 1：不要那片随机的明暗。地形用它——土面的斑驳已经在
+    // bridge.js 里按世界坐标算进颜色了，再叠一层随面片走的抖动，
+    // 岸上就会出现几块钉在面片上、跟着相机转来转去的色斑。
+    j: flat ? 1 : jitterOf(m.faces.length + 7 + seedOff)
   })
 }
 
 // ---- 图元 ----
 
-/** 单个四边形（p 为 4 个 [x,y,z]） */
-function quad(m, p0, p1, p2, p3, color) {
+/** 单个四边形（p 为 4 个 [x,y,z]）。flat = 1 关掉逐面随机明暗，见 face() */
+function quad(m, p0, p1, p2, p3, color, flat) {
   const a = vert(m, p0[0], p0[1], p0[2])
   const b = vert(m, p1[0], p1[1], p1[2])
   const c = vert(m, p2[0], p2[1], p2[2])
   const d = vert(m, p3[0], p3[1], p3[2])
-  face(m, [a, b, c, d], color)
+  face(m, [a, b, c, d], color, flat)
 }
 
 /** 二维多边形（xy 平面）沿 z 拉伸成棱柱。poly2d: [[x,y], ...]，会自动纠正为逆时针 */
@@ -139,6 +142,86 @@ function archRing(m, cx, cy, rIn, rOut, phi0, phi1, z0, z1, segs, color, mask) {
   face(m, [I0[segs], O0[segs], O1[segs], I1[segs]], color)
 }
 
+/**
+ * 带收分的拱券。赵州桥 28 道券并列砌筑，桥宽自拱顶 9.0 m 收到拱脚 9.6 m，
+ * 所以每道券都是上窄下宽的楔形，不能用定宽的 archRing。
+ *
+ * hwAt(phi) 给出该角度处的半桥宽：拱顶 hwCrown、拱脚 hwSpring，按 |phi|/hwRef 线性插值。
+ * zf0 / zf1 是这道券在总宽上的归一化起止位置（-1 ~ +1）：
+ *   28 道并列时第 i 道取 zf0 = -1 + 2i/28、zf1 = -1 + 2(i+1)/28，
+ *   相邻两道共用同一个 z 面，因此券与券之间严丝合缝，mask 位 0/1 可省掉内部面。
+ */
+function archRingT(m, cx, cy, rIn, rOut, phi0, phi1, zf0, zf1,
+                   hwCrown, hwSpring, hwRef, segs, color, mask, phiO0, phiO1) {
+  // phiO0 / phiO1（可省）：外弧自己的角度区间。省掉就与外弧同区间。
+  // 传一个更窄的区间，外弧就被**在两端竖直切齐**——小拱券要用。
+  // 小拱的洞是一个正圆的弧配上两条竖边，券脚落在竖直的边上；外弧若照内弧
+  // 一路扫到 s.th（几乎 90°），弧端会横向甩出 a·(1 - R/(R+rt)) ≈ 0.4 m，
+  // 越过洞口的竖边捅进侧墙里，在墙上露出几块错位的石头。
+  // 外弧切到 asin(a/(R+rt)) 处，两端正好收在 x = xc ± a，与洞口竖边齐平。
+  if (phiO0 === undefined) phiO0 = phi0
+  if (phiO1 === undefined) phiO1 = phi1
+  const O0 = [], O1 = [], I0 = [], I1 = []
+  const PO = []
+  for (let s = 0; s <= segs; s++) {
+    const phi = phi0 + (phi1 - phi0) * (s / segs)
+    const sp = Math.sin(phi), cp = Math.cos(phi)
+    let t = Math.abs(phi) / hwRef
+    if (t > 1) t = 1
+    const hw = hwCrown + (hwSpring - hwCrown) * t
+    const z0 = zf0 * hw, z1 = zf1 * hw
+    let po = phi
+    if (po < phiO0) po = phiO0
+    if (po > phiO1) po = phiO1
+    PO.push(po)
+    O0.push(vert(m, cx + rOut * Math.sin(po), cy + rOut * Math.cos(po), z0))
+    O1.push(vert(m, cx + rOut * Math.sin(po), cy + rOut * Math.cos(po), z1))
+    I0.push(vert(m, cx + rIn * sp, cy + rIn * cp, z0))
+    I1.push(vert(m, cx + rIn * sp, cy + rIn * cp, z1))
+  }
+  for (let s = 0; s < segs; s++) {
+    // 外弧被切掉的那一段上，相邻两个外弧点重合，这一片是零面积，
+    // 法线算出来是 NaN，会把背面剔除带崩，跳过不画
+    if (PO[s] !== PO[s + 1]) {
+      face(m, [O0[s], O1[s], O1[s + 1], O0[s + 1]], color)   // 外弧面
+    }
+    face(m, [I0[s], I0[s + 1], I1[s + 1], I1[s]], color)     // 内弧面
+    if (mask & 1) face(m, [I0[s], O0[s], O0[s + 1], I0[s + 1]], color)
+    if (mask & 2) face(m, [I1[s], I1[s + 1], O1[s + 1], O1[s]], color)
+  }
+  face(m, [O0[0], I0[0], I1[0], O1[0]], color)              // 起拱端
+  face(m, [I0[segs], O0[segs], O1[segs], I1[segs]], color)  // 收拱端
+}
+
+/**
+ * 拱背薄层（护拱石 / 眉石）：贴在拱券外弧上的一道石带，拱脚厚、拱顶薄。
+ * 只砌外表面与两个侧面，内表面与拱券外弧重合，省掉。
+ */
+function archSkin(m, cx, cy, rIn, rOut, phi0, phi1, zf0, zf1,
+                  hwCrown, hwSpring, hwRef, thCrown, thSpring, segs, color, mask) {
+  const A0 = [], A1 = [], B0 = [], B1 = []
+  for (let s = 0; s <= segs; s++) {
+    const phi = phi0 + (phi1 - phi0) * (s / segs)
+    const sp = Math.sin(phi), cp = Math.cos(phi)
+    let t = Math.abs(phi) / hwRef
+    if (t > 1) t = 1
+    const hw = hwCrown + (hwSpring - hwCrown) * t
+    const th = rOut + thCrown + (thSpring - thCrown) * t
+    const z0 = zf0 * hw, z1 = zf1 * hw
+    A0.push(vert(m, cx + rIn * sp, cy + rIn * cp, z0))
+    A1.push(vert(m, cx + rIn * sp, cy + rIn * cp, z1))
+    B0.push(vert(m, cx + th * sp, cy + th * cp, z0))
+    B1.push(vert(m, cx + th * sp, cy + th * cp, z1))
+  }
+  for (let s = 0; s < segs; s++) {
+    face(m, [B0[s], B1[s], B1[s + 1], B0[s + 1]], color)   // 外表面
+    if (mask & 1) face(m, [A0[s], B0[s], B0[s + 1], A0[s + 1]], color)
+    if (mask & 2) face(m, [A1[s], B1[s], B1[s + 1], A1[s + 1]], color)
+  }
+  if (mask & 1) face(m, [B0[0], A0[0], A0[segs], B0[segs]], color)
+  if (mask & 2) face(m, [A1[0], B1[0], B1[segs], A1[segs]], color)
+}
+
 /** 把 src 的所有顶点/面并进 dst（带索引偏移） */
 function merge(dst, src) {
   const off = dst.pos.length / 3
@@ -166,5 +249,6 @@ function centerOf(m) {
 }
 
 module.exports = {
-  newMesh, setSeed, vert, face, quad, prismZ, box, archRing, merge, centerOf, LIGHT, AMB
+  newMesh, setSeed, vert, face, quad, prismZ, box, archRing, archRingT, archSkin,
+  merge, centerOf, LIGHT, AMB
 }

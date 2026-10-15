@@ -23,10 +23,12 @@ page {
 
 /* ---------- 抬头 ---------- */
 
+/* top 由 index.js 的 measureTop() 量出来，走行内 style。
+   写成 calc(N rpx + env(safe-area-inset-top)) 在模拟器和安卓上
+   env() 恒为 0，这一块会正好顶在状态栏和右上角胶囊按钮下面 */
 .title {
   position: absolute;
   left: 34rpx;
-  top: calc(24rpx + env(safe-area-inset-top));
   pointer-events: none;
 }
 
@@ -46,14 +48,152 @@ page {
   text-shadow: 0 2rpx 8rpx rgba(255, 255, 255, 0.55);
 }
 
-/* 右上角要让开胶囊按钮 */
+/* 抬头这一行已经整体让到胶囊按钮下面了，右边不用再空出 210rpx */
 .fps {
   position: absolute;
-  right: 210rpx;
-  top: calc(34rpx + env(safe-area-inset-top));
+  right: 34rpx;
   font-size: 19rpx;
   color: rgba(43, 39, 35, 0.42);
   pointer-events: none;
+}
+
+/* ---------- 数据出处 ---------- */
+
+/* 触发器压在抬头右下，纵向落在抬头与读数卡之间 */
+.src-btn {
+  position: absolute;
+  right: 34rpx;
+  padding: 8rpx 20rpx;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  border-radius: 999rpx;
+  color: #8e3b26;
+  background: rgba(252, 248, 240, 0.84);
+  border: 1rpx solid rgba(158, 132, 96, 0.42);
+}
+
+.src-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(30, 26, 22, 0.42);
+}
+
+.src {
+  position: absolute;
+  left: 30rpx;
+  right: 30rpx;
+  bottom: calc(52rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  border-radius: 18rpx;
+  background: #fcf8f0;
+  box-shadow: 0 12rpx 44rpx rgba(40, 30, 18, 0.3);
+  overflow: hidden;
+}
+
+.src-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22rpx 28rpx 16rpx;
+  border-bottom: 1rpx solid rgba(158, 132, 96, 0.26);
+}
+
+.src-title {
+  font-size: 27rpx;
+  font-weight: 600;
+  letter-spacing: 3rpx;
+  color: #2b2723;
+}
+
+.src-close {
+  font-size: 22rpx;
+  color: #8e3b26;
+  padding: 4rpx 12rpx;
+}
+
+/* 页签的间距用左右对称的 margin，不用 :last-child。
+   WXSS 只认 .class / #id / 元素 / ::after / ::before 这一小撮选择器，
+   伪类拿掉末项边距那一套在这里写不出来；对称留白多缩进 4rpx，看不出 */
+.src-tabs {
+  display: flex;
+  padding: 12rpx 24rpx 0;
+}
+
+.src-tab {
+  flex: 1;
+  text-align: center;
+  padding: 10rpx 0;
+  margin: 0 4rpx;
+  font-size: 23rpx;
+  letter-spacing: 4rpx;
+  border-radius: 8rpx;
+  color: rgba(43, 39, 35, 0.6);
+  background: rgba(158, 132, 96, 0.14);
+}
+
+.src-tab.on {
+  color: #fdf6ec;
+  background: #8e3b26;
+}
+
+/* min-height: 0 不能省。flex 项默认 min-height: auto，内容比容器高时它宁可
+   撑破也不收缩；外层 .src 又是 overflow: hidden，撑出去的那截就被裁掉，
+   而且 scroll-view 拿不到确定的可用高度，滚都滚不动——整块下半个面板直接消失 */
+.src-body {
+  flex: 1;
+  min-height: 0;
+  padding: 16rpx 28rpx 28rpx;
+}
+
+.src-group {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #8e3b26;
+}
+
+/* 条目用两栏对齐：左边名目、右边数值。名目定宽 150rpx，
+   最长的「矢跨比」「并列拱券」都放得下，不必换行 */
+.src-row {
+  display: flex;
+  padding: 7rpx 0;
+  border-bottom: 1rpx solid rgba(158, 132, 96, 0.14);
+}
+
+.src-k {
+  width: 158rpx;
+  flex-shrink: 0;
+  font-size: 21rpx;
+  color: rgba(43, 39, 35, 0.5);
+}
+
+.src-v {
+  flex: 1;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: rgba(43, 39, 35, 0.82);
+}
+
+.src-src {
+  margin-top: 8rpx;
+  font-size: 18rpx;
+  line-height: 1.5;
+  color: rgba(43, 39, 35, 0.38);
+}
+
+.src-note {
+  margin-top: 26rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 10rpx;
+  background: rgba(158, 132, 96, 0.13);
+  font-size: 19rpx;
+  line-height: 1.6;
+  color: rgba(43, 39, 35, 0.6);
 }
 
 /* ---------- 营造阶段卡 ---------- */
@@ -62,7 +202,6 @@ page {
   position: absolute;
   left: 34rpx;
   right: 34rpx;
-  top: calc(140rpx + env(safe-area-inset-top));
   padding: 20rpx 24rpx;
   border-radius: 14rpx;
   background: rgba(252, 248, 240, 0.9);
@@ -113,7 +252,6 @@ page {
   position: absolute;
   left: 34rpx;
   right: 34rpx;
-  top: calc(140rpx + env(safe-area-inset-top));
   padding: 14rpx 10rpx;
   border-radius: 14rpx;
   background: rgba(22, 32, 44, 0.72);
@@ -148,24 +286,39 @@ page {
 .cmp {
   position: absolute;
   left: 34rpx;
-  top: calc(370rpx + env(safe-area-inset-top));
-  padding: 16rpx 22rpx;
+  padding: 14rpx 20rpx;
   border-radius: 14rpx;
   background: rgba(252, 248, 240, 0.9);
   border-left: 5rpx solid #c4563a;
   box-shadow: 0 6rpx 22rpx rgba(60, 46, 28, 0.13);
 }
 
+/* 两栏并排。左栏「此刻的水力对比」、右栏「静态的省料账」，
+   原来竖排成八行，高度顶到桥面上去了 */
+.cmp-row {
+  display: flex;
+}
+
+.cmp-col {
+  flex: 1;
+  padding-right: 14rpx;
+}
+
 .cmp-title {
-  font-size: 21rpx;
+  font-size: 19rpx;
   font-weight: 600;
   color: #8e3b26;
-  margin-bottom: 8rpx;
+  margin-bottom: 6rpx;
+}
+
+/* 横跨两栏的那一行（此刻过水的是哪几孔小拱），与上面两栏之间留一档间距 */
+.cmp-wide {
+  margin-top: 8rpx;
 }
 
 .cmp-line {
-  font-size: 21rpx;
-  line-height: 1.7;
+  font-size: 19rpx;
+  line-height: 1.5;
   color: rgba(43, 39, 35, 0.7);
 }
 
