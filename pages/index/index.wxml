@@ -15,11 +15,13 @@
     <view class="title-main">赵州桥</view>
     <view class="title-sub">隋 · 大业年间 595—605 · 匠人李春</view>
   </view>
-  <view class="fps" style="top:{{topTitle + 6}}px">FPS {{fps}}</view>
-  <view class="src-btn" style="top:{{topBtn}}px" bindtap="onToggleSrc">数据出处</view>
+  <view class="topbtns" style="top:{{topBtn}}px">
+    <view class="src-btn" bindtap="onToggleSec">剖面图</view>
+    <view class="src-btn" bindtap="onToggleSrc">数据出处</view>
+  </view>
 
-  <!-- 营造阶段卡 -->
-  <view class="phase" wx:if="{{mode === 'build'}}" style="top:{{topCard}}px">
+  <!-- 营造阶段卡。剖面图铺开时这三张卡一概让位，不然和剖面挤在一起 -->
+  <view class="phase" wx:if="{{mode === 'build' && !sec}}" style="top:{{topCard}}px">
     <view class="phase-name">{{phaseName}}</view>
     <view class="phase-desc">{{phaseDesc}}</view>
     <view class="bar"><view class="bar-fill" style="width:{{progressPct}}%"></view></view>
@@ -30,7 +32,7 @@
   </view>
 
   <!-- 泄洪读数 -->
-  <view class="hud" wx:if="{{mode === 'flood'}}" style="top:{{topCard}}px">
+  <view class="hud" wx:if="{{mode === 'flood' && !sec}}" style="top:{{topCard}}px">
     <view class="hud-row">
       <view class="cell">
         <view class="cell-v">{{readout.h}}</view>
@@ -64,7 +66,7 @@
   <!-- 敞肩 / 实肩 对比。左栏是此刻的水力对比，右栏是四个小拱静态的
        省料账，最后一行横跨两栏。八行竖排要 190 px 高，会压到桥面上——
        竖屏上半只有 300 px 可用（桥顶在 390 px 上下），分两栏才收得进 -->
-  <view class="cmp" wx:if="{{mode === 'flood' && open}}" style="top:{{topCmp}}px">
+  <view class="cmp" wx:if="{{mode === 'flood' && open && !sec}}" style="top:{{topCmp}}px">
     <view class="cmp-row">
       <view class="cmp-col">
         <view class="cmp-title">敞肩之利（相对实肩拱）</view>
@@ -109,7 +111,6 @@
       </view>
       <view class="views">
         <view class="chip {{view === 'full' ? 'on' : ''}}" data-v="full" bindtap="onView">全景</view>
-        <view class="chip {{view === 'side' ? 'on' : ''}}" data-v="side" bindtap="onView">正视</view>
         <view class="chip {{view === 'under' ? 'on' : ''}}" data-v="under" bindtap="onView">拱下</view>
         <view class="chip {{view === 'small' ? 'on' : ''}}" data-v="small" bindtap="onView">小拱</view>
         <view class="chip {{flat ? 'on' : ''}}" bindtap="onToggleFlat">坦拱对照</view>
@@ -130,18 +131,30 @@
         />
         <text class="val">{{q}} m³/s</text>
       </view>
+      <!-- 水量尺。三段的宽度按流量区间等比给，交界处正好就是两个临界流量。
+           已经漫过的档整段点亮，读法是"水已经漫到这几孔了" -->
+      <view class="bands">
+        <view
+          class="band {{index <= band ? 'on' : ''}}"
+          wx:for="{{bands}}" wx:key="label"
+          style="flex:{{item.w}}"
+          data-q="{{item.q}}" bindtap="onBand"
+        >{{item.label}}</view>
+      </view>
       <view class="views">
-        <view class="chip {{autoFlood ? 'on' : ''}}" bindtap="onToggleAuto">洪水过程</view>
+        <view class="chip {{view === 'full' ? 'on' : ''}}" data-v="full" bindtap="onView">全景</view>
+        <view class="chip {{view === 'small' ? 'on' : ''}}" data-v="small" bindtap="onView">小拱</view>
+        <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
         <view class="chip {{open ? 'on' : ''}}" bindtap="onToggleSpandrel">
           {{open ? '敞肩拱' : '实肩拱'}}
         </view>
-        <view class="chip" data-v="side" bindtap="onView">正视</view>
-        <view class="chip" data-v="full" bindtap="onView">全景</view>
-        <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
+        <view class="chip {{thrust ? 'on' : ''}}" bindtap="onToggleThrust">受力</view>
+        <view class="chip {{autoFlood ? 'on' : ''}}" bindtap="onToggleAuto">洪水过程</view>
       </view>
       <view class="hint">
-        拖动旋转，双指缩放。水位漫过外侧小拱的券脚（3.91 m）后，那两孔先开始过水；
-        再涨到 6.05 m 才够着内侧那两孔。切到「实肩拱」即可对比没有小拱时的过水与受力。
+        拖动旋转，双指缩放。外侧两个小拱在 {{qOuter}} m³/s 开始过水，内侧两个要
+        涨到 {{qInner}} m³/s——尺子上点一段可直接跳到那一档。
+        切「实肩拱」看没有小拱时的过水，开「受力」看重量怎么沿拱轴压到两岸。
       </view>
     </block>
   </view>
@@ -151,7 +164,7 @@
   <view class="src-mask" wx:if="{{srcOpen}}" bindtap="onToggleSrc"></view>
   <view class="src" wx:if="{{srcOpen}}" style="top:{{topTitle}}px">
     <view class="src-head">
-      <text class="src-title">尺寸数据与出处</text>
+      <text class="src-title">尺寸、做法与出处</text>
       <text class="src-close" bindtap="onToggleSrc">关闭</text>
     </view>
     <view class="src-tabs">
@@ -172,7 +185,20 @@
           <view class="src-src">{{item.from}}</view>
         </block>
       </block>
-      <view class="src-note">
+      <block wx:if="{{srcTab === '年表'}}">
+        <view class="an-row" wx:for="{{annals}}" wx:key="t">
+          <text class="an-y">{{item.y}}</text>
+          <view class="an-body">
+            <text class="an-t">{{item.t}}</text>
+            <text class="an-s">{{item.s}}</text>
+          </view>
+        </view>
+        <view class="src-note">
+          年表只记「哪一年出了什么事」。朝代能断到年的才写年；标「通行说法」的，
+          是流传很广但没找到一手文献的。
+        </view>
+      </block>
+      <view class="src-note" wx:else>
         标【本模型】的条目是这个小程序自己算的，不是史料数字。其余均为文献值或通行数据。
       </view>
     </scroll-view>

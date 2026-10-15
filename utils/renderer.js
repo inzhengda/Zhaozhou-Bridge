@@ -9,6 +9,10 @@ const M = require('./mat4.js')
 
 const NEAR_W = 0.25
 const MAX_CLIP = 8          // 一个面最多被裁出 8 个顶点
+// 没入水下的地形在排序时往后沉这么多米。取值要盖住"相邻两格的格心横坐标
+// 差一整格宽"带来的深度误差（最宽的河格 13.8 m × sin(yaw) ≤ 2.7 m），
+// 又不能让河床翻到真正在它后面的东西前面去——8 m 往上留一倍余量够了。
+const WET_SINK = 10
 
 // 颜色字符串缓存：每通道量化到 5 bit，最多 32768 项
 const CSS = new Array(32768)
@@ -180,6 +184,25 @@ function pushFace(sc, pos, faceRec, opt) {
   }
   const depth = nw > 0 ? sumW / nw : 0
 
+  // 整块没入水下的判据，见下面上色那一段的说明。这里先算出来，排序也要用。
+  const wet = opt.waterY !== undefined && fTop < opt.waterY
+
+  // 排序深度。默认就是真实深度；没入水下的**地形**往后沉一截。
+  //
+  // 水面和地形共用同一张分格表，同一格的深度几乎相等，谁先画谁后画都对。
+  // 出问题的是**相邻两格**：两格的格心横坐标差着一整格宽，而深度里带着一个
+  // x 项（m[12]，本机位约 -0.035），两格就差了 W·sin(yaw)——8 m 的格子在
+  // yaw 0.19 时是 1.5 m。栅格化时那条公共边两个面都要涂，排序一错，
+  // 河面上就沿着 x = ±8 的格子线裂出一道没入水的干河床，一蓝一褐。
+  //
+  // 河床只该隔着水被人看见，任何时候都不该盖住水面，索性整体往后沉，
+  // 怎么排都排在水面之前。桥体（opt.waterTint）不沉：它有一半露在水上，
+  // 要和岸、和水面正常比深度。
+  //
+  // 沉的是排序用的那个数，真实深度照旧——雾按真实深度拉，
+  // 河床本就在起雾距离以内，不该因为排序被顺手推远。
+  const sortD = (wet && !opt.waterTint) ? depth + WET_SINK : depth
+
   // 4) 上色（opt.color 可整件覆盖基色，用于建造高亮）
   const base = opt.color || faceRec.c
   let r = base[0] * faceRec.k * faceRec.j
@@ -208,7 +231,6 @@ function pushFace(sc, pos, faceRec, opt) {
   // 十几米见方的粗格，一格从岸边一直铺到水里，面心判会把水线以上的干岸
   // 也一并压暗，岸边就横着一条脏带子。改成整块没入才压暗之后，跨水线的
   // 那格保持土色，水下部分交给半透明的蓝色水面去压，水线反而更利落。
-  const wet = opt.waterY !== undefined && fTop < opt.waterY
   if (wet) {
     const sub = opt.waterY - faceRec.cy          // 没入水下的深度
     if (opt.waterTint) {
@@ -246,7 +268,7 @@ function pushFace(sc, pos, faceRec, opt) {
 
   const rec = {
     p: p,
-    d: depth,
+    d: sortD,
     s: cssOf(r, g, b),
     a: opt.alpha || 1
   }

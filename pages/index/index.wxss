@@ -48,21 +48,19 @@ page {
   text-shadow: 0 2rpx 8rpx rgba(255, 255, 255, 0.55);
 }
 
-/* 抬头这一行已经整体让到胶囊按钮下面了，右边不用再空出 210rpx */
-.fps {
+/* ---------- 右上角的两枚浮层开关 ---------- */
+
+/* 剖面图 与 数据出处 并排，落位由外层统一给（top 见 index.js 的 topBtn）。
+   两枚都是"随时可查"的参考浮层，不属于任何一个模式，所以放在这里
+   而不是底下那排模式内的 chip 里 */
+.topbtns {
   position: absolute;
   right: 34rpx;
-  font-size: 19rpx;
-  color: rgba(43, 39, 35, 0.42);
-  pointer-events: none;
+  display: flex;
 }
 
-/* ---------- 数据出处 ---------- */
-
-/* 触发器压在抬头右下，纵向落在抬头与读数卡之间 */
 .src-btn {
-  position: absolute;
-  right: 34rpx;
+  margin-left: 12rpx;
   padding: 8rpx 20rpx;
   font-size: 20rpx;
   letter-spacing: 1rpx;
@@ -186,6 +184,44 @@ page {
   color: rgba(43, 39, 35, 0.38);
 }
 
+/* ---------- 年表 ---------- */
+
+/* 年份窄栏在左、事件在右。年份这一栏定宽，各行的事件就都从同一条线起，
+   讲的时候眼睛不用横着找 */
+.an-row {
+  display: flex;
+  padding: 12rpx 0 14rpx;
+  border-bottom: 1rpx solid rgba(158, 132, 96, 0.14);
+}
+
+.an-y {
+  width: 168rpx;
+  flex-shrink: 0;
+  font-size: 21rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #8e3b26;
+}
+
+.an-body {
+  flex: 1;
+}
+
+.an-t {
+  display: block;
+  font-size: 22rpx;
+  line-height: 1.55;
+  color: rgba(43, 39, 35, 0.82);
+}
+
+.an-s {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 18rpx;
+  line-height: 1.5;
+  color: rgba(43, 39, 35, 0.38);
+}
+
 .src-note {
   margin-top: 26rpx;
   padding: 16rpx 18rpx;
@@ -283,10 +319,13 @@ page {
 
 /* ---------- 敞肩对比 ---------- */
 
+/* 这张卡的底边离桥面最近：抬头量到胶囊下沿、读数卡再往下排，
+   390 px 宽的机器上算下来正好压在桥面栏板顶上。行高收到 1.42、
+   上下留白收到 12rpx，整卡矮掉约 10 px，才让得开 */
 .cmp {
   position: absolute;
   left: 34rpx;
-  padding: 14rpx 20rpx;
+  padding: 12rpx 20rpx;
   border-radius: 14rpx;
   background: rgba(252, 248, 240, 0.9);
   border-left: 5rpx solid #c4563a;
@@ -318,7 +357,7 @@ page {
 
 .cmp-line {
   font-size: 19rpx;
-  line-height: 1.5;
+  line-height: 1.42;
   color: rgba(43, 39, 35, 0.7);
 }
 
@@ -386,6 +425,32 @@ page {
   min-width: 140rpx;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* 水量尺：滑块下面那条三段尺。
+   段宽由行内 flex 给（各段按自己的流量区间等比），交界处于是天然落在
+   两个临界流量上——既不用算百分比，也不用去迁就滑块轨道左右那点留白。
+   三段全亮时靠每条左边的细白线留着界，不至于糊成一条蓝 */
+.bands {
+  display: flex;
+  margin-top: 8rpx;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.band {
+  padding: 7rpx 2rpx;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 18rpx;
+  color: rgba(43, 39, 35, 0.52);
+  background: rgba(158, 132, 96, 0.16);
+  border-left: 1rpx solid rgba(252, 248, 240, 0.85);
+}
+
+.band.on {
+  color: #fdf6ec;
+  background: #3a6f9e;
 }
 
 .btn {
