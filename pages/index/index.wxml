@@ -81,7 +81,10 @@
         <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
       </view>
     </view>
-    <view class="cmp-line cmp-wide">此刻过水的小拱 <text class="hl">{{sp.flowing}}</text>，多走出水 <text class="hl">{{sp.nowArea}} m²</text></view>
+    <!-- 「同一水位下」这半句不能省。敞肩桥过同样的流量水位本来就低些，
+         若拿两座桥各自的水位去比，差数只剩一小半（900 m³/s 下 17 → 7）。
+         剖面图那两张（过水断面、敞肩对照）走的是同一个定义，三处才对得上 -->
+    <view class="cmp-line cmp-wide">此刻小拱：<text class="hl">{{sp.flowing}}</text>，同一水位下多让出 <text class="hl">{{sp.nowArea}} m²</text></view>
   </view>
 
   <!-- 底部控制台 -->

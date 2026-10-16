@@ -59,6 +59,18 @@ SMALL.forEach(function (s) {
   s.x1 = s.x0 + 2 * s.a
   s.xc = s.x0 + s.a
   s.spring = haunchTop(s.x0)
+  // 洞底最低点。洞口下面那条边是主拱外弧，它一路往桥台方向斜下去，
+  // 所以「券脚」和「水几时开始从这儿过」是两回事：
+  //   · spring = 拱背在 x0（靠拱顶那一端）的高度，是**圆券的起拱线**。
+  //     靠拱顶那头券脚与拱背相切，洞口在那里正好收成零高。
+  //   · sill   = 拱背在 x1（靠桥台那一端）的高度，是**洞口的最低点**。
+  //     水涨到这里就开始从洞口最外侧那一条缝里过——比漫过券脚早得多
+  //     （外侧那对：sill 0.98 m 对 spring 3.91 m，差了近 3 m）。
+  //
+  // 水力计算（hydro.js 的过水断面、SPANDREL 的凿空方量、3D 侧墙的洞口）
+  // 一律拿拱背当下边界，也就是认 sill；只有"漫过券脚"这句话该用 spring。
+  // 两者混用会让卡片上「尚无一孔过水」和「多让出 2 m²」并排出现。
+  s.sill = haunchTop(s.x1)
   s.R = (s.a * s.a + s.f * s.f) / (2 * s.f)
   s.k = (s.f * s.f - s.a * s.a) / (2 * s.f)
   s.cy = s.spring + s.k
@@ -578,20 +590,35 @@ function soilTone(base, x, z) {
 function terrainMesh() {
   const m = mesh.newMesh()
   const xs = TERRAIN_XS
-  for (let j = 0; j < TERRAIN_ZS.length - 1; j++) {
-    const z0 = TERRAIN_ZS[j], z1 = TERRAIN_ZS[j + 1]
+  const zs = TERRAIN_ZS
+
+  // 格点顶点按 (j, k) 复用，不是一格一个 quad 各建各的四个点。
+  //
+  // 原先每格独立建顶点，相邻两格之间就没有**共用的边**——渲染器描边时
+  // 只能把每格的四条边都判成"网格边界"，于是水面下浮出一张方格网，
+  // 河床上横平竖直全是线。格点坐标本来就是 (x, z) 的纯函数，缓存一份就行。
+  // 复用之后只有真正的折坡（17 / 20 / 24 / 32.2 / 46 那几个折点）才是折痕。
+  const vid = new Array(zs.length * xs.length)
+  const vAt = (ji, ki) => {
+    const at = ji * xs.length + ki
+    let v = vid[at]
+    if (v === undefined) {
+      const x = xs[ki], z = zs[ji]
+      v = mesh.vert(m, x, groundY(Math.abs(x)) + bankRelief(x, z), z)
+      vid[at] = v
+    }
+    return v
+  }
+
+  for (let j = 0; j < zs.length - 1; j++) {
+    const z0 = zs[j], z1 = zs[j + 1]
     for (let k = 0; k < xs.length - 1; k++) {
       const xa = xs[k], xb = xs[k + 1]
-      const ya = groundY(Math.abs(xa)), yb = groundY(Math.abs(xb))
       const col = soilTone((Math.abs(xa) <= 17 && Math.abs(xb) <= 17) ? C.bed : C.ground,
         (xa + xb) / 2, (z0 + z1) / 2)
       // 只铺地表一层。底面、z 两端和 x 两端的立面都省掉：地形铺到
       // ±90 × ±520，四周早已在雾的 far 之外，没人看得见那几条边
-      mesh.quad(m,
-        [xa, ya + bankRelief(xa, z0), z0],
-        [xa, ya + bankRelief(xa, z1), z1],
-        [xb, yb + bankRelief(xb, z1), z1],
-        [xb, yb + bankRelief(xb, z0), z0], col, 1)
+      mesh.face(m, [vAt(j, k), vAt(j + 1, k), vAt(j + 1, k + 1), vAt(j, k + 1)], col, 1)
     }
   }
   return m

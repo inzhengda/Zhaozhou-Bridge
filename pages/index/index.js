@@ -32,11 +32,12 @@ const PHASES = [
     t: B.T.small[0], key: 'small', name: '架设四个小拱',
     // "世界上最早的桥"这个说法不能给：郦道元《水经注》记的旅人桥（约公元 282 年）
     // 可能更早，只是没有存世。能站住的定语是"现存"——说课时被追问也不虚。
-    desc: '净跨 3.8 m ×2、2.85 m ×2 —— 现存最早的敞肩拱'
+    desc: '净跨 ' + (2 * B.SMALL[1].a).toFixed(2) + ' m ×2、' +
+      (2 * B.SMALL[0].a).toFixed(2) + ' m ×2 —— 现存最早的敞肩拱'
   },
   {
     t: B.T.deck[0], key: 'deck', name: '铺砌桥面',
-    desc: '桥面随拱势微拱，连同引桥全长 64.4 m'
+    desc: '桥面随拱势微拱，连同引桥全长 ' + (2 * B.DECK_HALF).toFixed(1) + ' m'
   },
   {
     t: B.T.rail[0], key: 'rail', name: '安装栏板望柱',
@@ -115,7 +116,26 @@ function qAtLevel(level) {
   return (lo + hi) / 2
 }
 
-// 外侧那对券脚低、先过水；内侧那对高，要再涨一档才够着。
+/**
+ * 同一水位下，敞肩桥比实肩桥多出来的净过水断面——四个小拱此刻真正
+ * 让出来的那一片。
+ *
+ * 「同一水位」这四个字是全部要点。敞肩桥过同样的流量，水位本来就涨得
+ * 低些，若拿两条桥**各自**的水位去比，比的是两件不同的事，差数会小掉
+ * 一多半（900 m³/s 下，同一水位是 17 m²，各自水位只剩 7 m²）。
+ * HUD 的「敞肩之利」、过水断面图、敞肩对照图都走这一处，三处才对得上。
+ */
+function spandrelBonus(h) {
+  return H.areaAt(h, H.TABLE_OPEN) - H.areaAt(h, H.TABLE_SOLID)
+}
+
+// 外侧那对券脚低、先漫过；内侧那对高，要再涨一截才够着。
+//
+// 判据取的是**起拱线**（spring），不是洞口最低点（sill）。洞口最低点太靠下
+// ——外侧那对才 0.98 m，一档就落在 187 m³/s 上，三档会排成 37/670/443，
+// 头一档细得写不下字。起拱线是"整孔开始泄水"的档位，拿它分档，尺子
+// 三档匀称，说的也是真事；洞口见水那一刻交给卡片上的「初漫洞底」去讲。
+//
 // 取整到 1 m³/s：滑块本身就是整数，界线必须落在整数上，
 // 否则提示里写 709、尺子却在 710 才翻档，对不上（差 0.4 m³/s，于水位是 3 mm）
 const Q_OUTER = Math.round(qAtLevel(B.SMALL[1].spring))
@@ -133,6 +153,20 @@ const BANDS = [
   { label: '外侧两孔', q: Math.round((Q_OUTER + Q_INNER) / 2), w: Q_INNER - Q_OUTER },
   { label: '内侧两孔', q: Math.round((Q_INNER + Q_MAX) / 2), w: Q_MAX - Q_INNER }
 ]
+/**
+ * 剖面卡片顶上那六个页签的说明。页签只有四个字，光看标签说不清
+ * "这张图要我看什么"——一行说明补上，省得说课时还要另讲一句。
+ * 键与 secTabs 里的 key 一一对应，漏了哪个会走 || 兜底，不会画成空白。
+ */
+const SEC_HINT = {
+  long: '沿桥长剖开，宽度方向取桥中线',
+  cross: '在拱顶把桥横着切开，看的是宽度方向',
+  area: '同一个流量下，敞肩与实肩各能过多少水',
+  rings: '28 道券怎么砌，又靠什么连成一体',
+  span: '只差四个小拱，过水断面与自重差出多少',
+  found: '五层条石直接坐在粗砂层上，未打桩'
+}
+
 const DETAIL_ZOOM_ON = 0.42   // 拉近到这个倍率以下才加密拱石分段
 const DETAIL_ZOOM_OFF = 0.56  // 回退阈值留点余量，免得在临界点上反复重建
 const SPLIT_STEP = 0.5      // 拆解时相邻两券沿桥宽方向让开多少米
@@ -247,7 +281,10 @@ Page({
       nowArea: '0.0'                                      // 此刻小拱让出的过水断面 m²
     },
     thrust: false,        // 受力：把桥面荷载沿拱轴传到两岸桥台的路径画出来
-    sec: false,           // 纵剖面图。开的时候 3D 上的标注一概让位
+    sec: false,           // 剖面图。开的时候 3D 上的标注一概让位
+    // 剖面图里翻的是哪一张：'long' 纵剖面（沿桥长剖开）、'cross' 横剖面
+    // （在拱顶横着切开）。默认仍是纵剖面，按钮文案和沿用习惯都不动
+    secTab: 'long',
     // 尺寸数据的出处，静态不变量，见 utils/sources.js
     sources: SRC.GROUPS,
     annals: SRC.ANNALS,
@@ -1226,7 +1263,7 @@ Page({
         ctx.moveTo(p1[0], p1[1] - 5); ctx.lineTo(p1[0], p1[1] + 5)
         ctx.stroke()
         this.tag(ctx, (p0[0] + p1[0]) / 2, p0[1] + 14,
-          '净跨 37.02 m', '#fdf6ec', 'rgba(158,62,40,0.88)')
+          '净跨 ' + B.SPAN.toFixed(2) + ' m', '#fdf6ec', 'rgba(158,62,40,0.88)')
       }
       // 矢高
       const f0 = pr(0, 0, 5.0), f1 = pr(0, B.RISE, 5.0)
@@ -1237,10 +1274,10 @@ Page({
         ctx.moveTo(f1[0] - 5, f1[1]); ctx.lineTo(f1[0] + 5, f1[1])
         ctx.stroke()
         this.tag(ctx, f1[0] + 40, (f0[1] + f1[1]) / 2,
-          '矢高 7.23 m', '#fdf6ec', 'rgba(158,62,40,0.88)')
+          '矢高 ' + B.RISE.toFixed(2) + ' m', '#fdf6ec', 'rgba(158,62,40,0.88)')
         // 矢跨比：坦拱是赵州桥最"反常识"的一处，值得单独点出来
         this.tag(ctx, f1[0] + 40, (f0[1] + f1[1]) / 2 + 18,
-          '矢跨比 1 : 5.12', '#fdf6ec', 'rgba(158,62,40,0.88)')
+          '矢跨比 1 : ' + (B.SPAN / B.RISE).toFixed(2), '#fdf6ec', 'rgba(158,62,40,0.88)')
       }
       // 四个小拱：内 2.85 靠拱顶、外 3.81 靠桥台，各自标净跨
       if (this.data.open && t > B.T.small[0]) {
@@ -1259,7 +1296,7 @@ Page({
       if (t > B.T.arch[0] + B.RING_DUR) {
         const r0 = pr(-B.HALF_SPAN, 1.2, 5.0)
         if (r0) {
-          this.tag(ctx, r0[0], r0[1] + 30, '28 道拱券并列', '#ffffff',
+          this.tag(ctx, r0[0], r0[1] + 30, B.RING_N + ' 道拱券并列', '#ffffff',
             'rgba(32,44,58,0.82)')
         }
       }
@@ -1268,7 +1305,7 @@ Page({
         const c0 = pr(0, B.HALF_SPAN, 6.0)
         if (c0) {
           this.tag(ctx, c0[0], c0[1] - 14,
-            '同跨半圆拱 矢高 18.51 m', '#fdf6ec', 'rgba(158,62,40,0.88)')
+            '同跨半圆拱 矢高 ' + B.HALF_SPAN.toFixed(2) + ' m', '#fdf6ec', 'rgba(158,62,40,0.88)')
         }
       }
     }
@@ -1281,7 +1318,7 @@ Page({
       const a0 = pr(0, B.RISE + 6.4, 0)
       if (a0) {
         this.tag(ctx, a0[0], a0[1] - 10,
-          '28 道券，每道独立成拱', '#fdf6ec', 'rgba(158,62,40,0.88)')
+          B.RING_N + ' 道券，每道独立成拱', '#fdf6ec', 'rgba(158,62,40,0.88)')
         this.tag(ctx, a0[0], a0[1] + 12,
           '腰铁咬住本券的券石', '#ffffff', 'rgba(46,46,52,0.86)')
         this.tag(ctx, a0[0], a0[1] + 34,
@@ -1379,13 +1416,35 @@ Page({
     ctx.fillStyle = PAPER
     this.roundRect(ctx, x0, y0, x1 - x0, y1 - y0, 14); ctx.fill()
 
+    // 六张图共用一个卡片，顶上一排页签来回换。
+    // 页签画在 canvas 上、由 onTouchStart 分派点击，不另开 WXML 一层：
+    // 卡片的高度是这里按机型量出来的（y0 跟着导航栏走、y1 让给下面的
+    // 控件），WXML 那边再照抄一遍，迟早有一头对不上
+    const tab = this.data.secTab
+    const tabs = this.secTabs(x0, y0)
+    this._secTabs = tabs
+    ctx.textAlign = 'center'
+    ctx.font = 'bold 12px sans-serif'
+    for (let i = 0; i < tabs.length; i++) {
+      const t = tabs[i]
+      const on = t.key === tab
+      this.roundRect(ctx, t.x, t.y, t.w, t.h, 6)
+      if (on) {
+        ctx.fillStyle = '#8e3b26'; ctx.fill()
+      } else {
+        ctx.fillStyle = 'rgba(158,132,96,0.14)'; ctx.fill()
+        ctx.strokeStyle = 'rgba(158,132,96,0.42)'; ctx.lineWidth = 1
+        this.roundRect(ctx, t.x + 0.5, t.y + 0.5, t.w - 1, t.h - 1, 6); ctx.stroke()
+      }
+      ctx.fillStyle = on ? PAPER : 'rgba(70,58,44,0.66)'
+      ctx.fillText(t.label, t.x + t.w / 2, t.y + t.h / 2 + 0.5)
+    }
+    // 说明另起一行。原先它挂在最后一个页签右边，六个页签一铺满就没有
+    // 那一块空档了；挪到下一行，六张图也就不用各留各的横向余量
     ctx.textAlign = 'left'
-    ctx.font = 'bold 14px sans-serif'
-    ctx.fillStyle = '#8e3b26'
-    ctx.fillText('纵剖面', x0 + 18, y0 + 21)
     ctx.font = '10px sans-serif'
     ctx.fillStyle = 'rgba(70,58,44,0.5)'
-    ctx.fillText('沿桥长剖开，宽度方向取桥中线', x0 + 68, y0 + 21)
+    ctx.fillText(SEC_HINT[tab] || SEC_HINT.long, x0 + 16, y0 + 45)
 
     // 卡片以内为界。地面那类多边形为了闭合要一直延伸到画幅之外，
     // 不裁就会糊到后面的 3D 场景上
@@ -1397,16 +1456,39 @@ Page({
     this.roundRect(ctx, x0 + 0.5, y0 + 0.5, x1 - x0 - 1, y1 - y0 - 1, 14)
     ctx.stroke()
 
+    // 六张图各画各的，都在这张卡片以内
+    if (tab === 'cross') {
+      this.secCross(ctx, x0, x1, y0, y1, PAPER, RED)
+      ctx.restore(); ctx.restore(); return
+    }
+    if (tab === 'area') {
+      this.secArea(ctx, x0, x1, y0, y1, PAPER, RED)
+      ctx.restore(); ctx.restore(); return
+    }
+    if (tab === 'rings') {
+      this.secRings(ctx, x0, x1, y0, y1, PAPER, RED)
+      ctx.restore(); ctx.restore(); return
+    }
+    if (tab === 'span') {
+      this.secSpan(ctx, x0, x1, y0, y1, PAPER, RED)
+      ctx.restore(); ctx.restore(); return
+    }
+    if (tab === 'found') {
+      this.secFound(ctx, x0, x1, y0, y1, PAPER, RED)
+      ctx.restore(); ctx.restore(); return
+    }
+
     // 版式。两块画幅按卡片实际高度分，不写死像素——小屏（812 高）上
     // 卡片只有三百出头，写死就把下面那张大样挤出卡片了。
-    // 90 = 抬头 36 + 图注两行与标题 44 + 底边留白 10，剩下的才是两张图。
+    // 112 = 抬头 58（页签 22 + 说明一行 14 + 上下留白）+ 图注两行与标题 44
+    //       + 底边留白 10，剩下的才是两张图。
     const avail = y1 - y0
-    const rest = avail - 90
+    const rest = avail - 112
     const fH = rest * 0.44
     const iH = rest * 0.56
 
     // ---- 全桥 ----
-    const fTop = y0 + 36
+    const fTop = y0 + 58
     const mpF = this.secMap(-27.6, 27.6, -3.9, 10.6, x0 + 18, x1 - 18, fTop, fTop + fH)
     this.secProfile(ctx, mpF, PAPER)
     this.secDimFull(ctx, mpF, RED, PAPER)
@@ -1417,9 +1499,15 @@ Page({
     ctx.font = '10px sans-serif'
     ctx.textAlign = 'left'
     ctx.fillStyle = 'rgba(70,58,44,0.74)'
-    ctx.fillText('拱肩小拱 ×4：每端两个，内孔净跨 2.85 m、外孔 3.81 m，两端对称', x0 + 20, capY)
+    ctx.fillText('拱肩小拱 ×4：每端两个，内孔净跨 ' + (2 * B.SMALL[0].a).toFixed(2) +
+      ' m、外孔 ' + (2 * B.SMALL[1].a).toFixed(2) + ' m，两端对称', x0 + 20, capY)
     ctx.fillStyle = 'rgba(70,58,44,0.5)'
-    ctx.fillText('主拱 28 道拱券并列砌筑，券厚 1.03 m；矢跨比 1 : 5.12，圆心角 84°', x0 + 20, capY + 15)
+    // 券厚与圆心角都从模型现算。原先写死"1.03 m、圆心角 84°"，
+    // 而 buildScene 按 37.02 / 7.23 反解出来的圆心角是 85°——图上画的
+    // 和字上写的差一度，说课时正好被人拿量角器比着问。
+    ctx.fillText('主拱 ' + B.RING_N + ' 道拱券并列砌筑，券厚 ' + (B.R_OUT - B.R_IN).toFixed(2) +
+      ' m；矢跨比 1 : ' + (B.SPAN / B.RISE).toFixed(2) +
+      '，圆心角 ' + (B.HALF_TH * 2 * 180 / Math.PI).toFixed(0) + '°', x0 + 20, capY + 15)
 
     // ---- 西端桥台大样 ----
     const iTop = capY + 34
@@ -1435,12 +1523,659 @@ Page({
     ctx.fillText('五层条石直接坐在粗砂层上，未打桩', x0 + 140, iTop + 5)
 
     // 左边的七十像素留给纵向尺寸的字
-    const mpI = this.secMap(-26.5, -18.51, -4.0, 2.2, x0 + 74, x1 - 18, iTop + 14, iTop + iH)
+    const mpI = this.secMap(-26.5, -B.HALF_SPAN, -4.0, 2.2, x0 + 74, x1 - 18, iTop + 14, iTop + iH)
     this.secProfile(ctx, mpI, PAPER)
     this.secDimInset(ctx, mpI, RED, PAPER)
 
     ctx.restore()
     ctx.restore()
+  },
+
+  /**
+   * 剖面卡片顶上那六个页签的位置。画的和点的都用这一份，
+   * 不各算一遍——各算一遍就是迟早有一头改漏。
+   *
+   * 标签一律四字：字数一样宽，六个页签才排成一条齐整的带子。
+   * 宽度按最小机型倒推——卡片内宽 402 − 左右各 16 的留白 = 370，
+   * 六个页签加五道缝正好 6×56 + 5×6 = 366，塞得下，不用换行。
+   */
+  secTabs(x0, y0) {
+    const w = 56, h = 22, gap = 6
+    const list = [
+      ['long', '纵剖面图'], ['cross', '横剖面图'], ['area', '过水断面'],
+      ['rings', '拱券分解'], ['span', '敞肩对照'], ['found', '桥台基础']
+    ]
+    const out = []
+    for (let i = 0; i < list.length; i++) {
+      out.push({
+        key: list[i][0], label: list[i][1],
+        x: x0 + 16 + i * (w + gap), y: y0 + 11, w: w, h: h
+      })
+    }
+    return out
+  },
+
+  /**
+   * 手指落的那一下是不是在页签上。在页签上就换图，并且把这一下吃掉——
+   * 一个手指按在卡片顶上，本意是点按钮，若还照旧去转身后那座 3D 桥，
+   * 就是没接住这一下。
+   */
+  hitSecTab(t) {
+    const tabs = this._secTabs
+    if (!tabs) return false
+    for (let i = 0; i < tabs.length; i++) {
+      const b = tabs[i]
+      if (t.x >= b.x && t.x <= b.x + b.w && t.y >= b.y && t.y <= b.y + b.h) {
+        if (b.key !== this.data.secTab) this.setData({ secTab: b.key })
+        return true
+      }
+    }
+    return false
+  },
+
+  /**
+   * 拱顶横剖面。在拱顶把桥横着切开，看的是**宽度**方向。
+   *
+   * 这张图专答纵剖面答不了的那一问：28 道券到底在哪儿。
+   * 纵剖面的切面正落在第 13、14 道券之间的券缝上（券 13 占 y −0.32..0，
+   * 券 14 占 0..0.32），28 道在纵剖面里一道压一道、全叠成了同一条线，
+   * 数不出数来。横着切才一道一道地摊开——这是这张图唯一的理由，
+   * 所以券缝是它的正题，画得比别处重。
+   *
+   * 下半截那两条是「收分」：同一条拱，拱顶全宽 9.00 m、拱脚 9.60 m，
+   * 每道券自 0.32 m 涨到 0.34 m。两条按上半截那张剖面的**同一个**绘图比
+   * 画，量出来的那 0.30 m 才是真的；另配一个比例，画着好看而已。
+   *
+   * 尺寸一律取自 utils/bridge.js：与 3D 那座桥、与纵剖面是同一份数。
+   */
+  secCross(ctx, x0, x1, y0, y1, paper, RED) {
+    const INK = 'rgba(64,54,42,0.6)'
+
+    const HW = B.HW_CROWN                 // 拱顶半宽 4.5 m
+    const DECK_HW = HW + 0.25             // 桥面比拱券略宽，挑出一点檐
+    const RAIL_HW = DECK_HW - 0.16        // 栏板中线 4.59 m
+    const zIn = B.archIntrados(0)         // 拱顶内弧
+    const zOut = B.archExtrados(0)        // 拱顶外弧
+    const zHau = B.haunchTop(0)           // 拱背，护拱石压在上面
+    const zDeckB = B.deckBottom(0)
+    const zDeckT = B.deckTop(0)
+    const zRailT = zDeckT - 0.06 + 0.58   // 栏板顶。拱顶这一刀正落在
+                                          // 一块栏板当中，切不到望柱
+    const zTie = B.CY + B.R_OUT + 0.18    // 铁拉杆，压在拱背之上
+    const cw = (2 * HW) / B.RING_N        // 拱顶每道券宽
+
+    const avail = y1 - y0
+    const zBot = zIn - 0.62, zTop = zRailT + 0.38
+    // 左边留出 66 px 给竖着写的尺寸字，与纵剖面那张桥台大样同一个做法
+    const rx0 = x0 + 66, rx1 = x1 - 16
+    const sNat = (rx1 - rx0) / (2 * 5.45)
+    // 横着的桥画在横着的卡片上，横向先到顶、竖向用不完：这张图的高就按
+    // 横向定下来的那个比例给自己，多出来的全归下面两条。不写死像素——
+    // 小屏（812 高）上卡片只有三百出头，写死就把下半截挤出卡片了
+    const aH = Math.min(sNat * (zTop - zBot) + 8, (avail - 150) * 0.6)
+    const aTop = y0 + 44
+    const mp = this.secMap(-5.45, 5.45, zBot, zTop, rx0, rx1, aTop, aTop + aH)
+    const P = mp.p
+    const cx = (rx0 + rx1) / 2
+
+    const rect = (xa, xb, za, zb, fill, stroke) => {
+      const a = P(xa, za), b = P(xb, zb)
+      ctx.beginPath()
+      ctx.rect(Math.min(a[0], b[0]), Math.min(a[1], b[1]),
+        Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]))
+      ctx.fillStyle = fill; ctx.fill()
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke() }
+    }
+    const band = (hw, za, zb, fill, stroke) => rect(-hw, hw, za, zb, fill, stroke)
+
+    // 画的次序就是砌的次序，与纵剖面那份 secProfile 一致：券、护拱石、
+    // 侧墙、桥面，最后栏板。颜色同一个来源，两张剖面才对得上
+    band(HW, zIn, zOut, '#9aa4aa', 'rgba(50,60,68,0.75)')           // 主拱券
+    band(HW, zOut, zHau, '#bcb19d', INK)                             // 护拱石
+    band(HW, zHau, zDeckB, '#c3bcac', INK)                           // 拱肩侧墙
+    band(DECK_HW, zDeckB, zDeckT, '#cfc9bb', 'rgba(64,54,42,0.75)')  // 桥面
+    for (let sg = -1; sg <= 1; sg += 2) {                            // 栏板
+      rect(sg * RAIL_HW - 0.12, sg * RAIL_HW + 0.12, zDeckT - 0.06, zRailT,
+        'rgba(196,188,174,0.9)', 'rgba(64,54,42,0.5)')
+    }
+
+    // 27 道券缝。这一层是这张图的正题
+    ctx.strokeStyle = 'rgba(50,60,68,0.55)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (let i = 1; i < B.RING_N; i++) {
+      const a = P(-HW + i * cw, zIn), b = P(-HW + i * cw, zOut)
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+    }
+    ctx.stroke()
+
+    // 铁拉杆。它横穿 28 道券，而这一刀切在拱顶，杆恰好躺在切面里——
+    // 于是它被顺着剖开，是一根长长的杆，不是断面上的一个圆点。
+    // 早先这里画的是个圆点，那是把"横穿"当成了"垂直穿过纸面"，反了。
+    // 真件直径约 0.10 m，在这个比例下三像素，按小程序一贯的做法放大画
+    // （见 drawTieBars），图上只表位置
+    const tieA = P(-HW - 0.34, zTie), tieB = P(HW + 0.34, zTie)
+    ctx.fillStyle = '#4c4845'
+    ctx.fillRect(tieA[0], tieA[1] - 2.6, tieB[0] - tieA[0], 5.2)
+    for (let k = 0; k < 2; k++) {
+      const tie = k ? tieB : tieA
+      ctx.beginPath()
+      ctx.arc(tie[0], tie[1], 2.6, 0, Math.PI * 2)
+      ctx.fillStyle = '#4c4845'; ctx.fill()
+      ctx.strokeStyle = paper; ctx.lineWidth = 1.2; ctx.stroke()
+    }
+
+    // 尺寸两道：券厚竖着量，字落在左边那片留白里；桥宽横着量在拱券之下
+    ctx.font = '10px sans-serif'
+    ctx.textBaseline = 'middle'
+    this.secDim(ctx, mp, -5.0, zIn, -5.0, zOut,
+      '券厚 ' + (zOut - zIn).toFixed(2) + ' m', RED, paper, -5.35, (zIn + zOut) / 2)
+    this.secDim(ctx, mp, -HW, zBot + 0.28, HW, zBot + 0.28,
+      '桥宽 ' + (2 * HW).toFixed(2) + ' m', RED, paper)
+
+    // ---- 上半的图注。数字写在这里而不是塞进图上：这张图横向不到
+    //      三十 px/m，券厚那一段只有三十像素高，洞里头放不下字 ----
+    ctx.textAlign = 'left'
+    ctx.font = '10px sans-serif'
+    const capY = aTop + aH + 14
+    ctx.fillStyle = 'rgba(70,58,44,0.74)'
+    ctx.fillText('拱券 ' + B.RING_N + ' 道并列砌筑，各道独立砌成，不是一整块石头雕的', x0 + 20, capY)
+    ctx.fillStyle = 'rgba(70,58,44,0.5)'
+    ctx.fillText('券背上压一层护拱石，把 ' + B.RING_N + ' 道券连成一条；拱顶每道券宽 ' +
+      cw.toFixed(2) + ' m', x0 + 20, capY + 15)
+    // 拉杆这一句原先写的是"中间那个圆点是……"，画改成横杆之后没跟着改，
+    // 图上画着杆、注里说圆点。它横穿 28 道券，这一刀切在拱顶，杆就躺在
+    // 切面里被顺着剖开，是个长条；两头那两点是露在券外的圆帽。
+    ctx.fillText('横穿 ' + B.RING_N + ' 道券的铁拉杆正在切面里，故画作长条；' +
+      '两端圆帽露出券外', x0 + 20, capY + 30)
+
+    // ---- 下半：收分 ----
+    const dy = capY + 48
+    ctx.strokeStyle = 'rgba(158,132,96,0.3)'
+    ctx.beginPath()
+    ctx.moveTo(x0 + 18, dy); ctx.lineTo(x1 - 18, dy)
+    ctx.stroke()
+    ctx.font = 'bold 11px sans-serif'
+    ctx.fillStyle = '#8e3b26'
+    ctx.fillText('收分：同一条拱在拱脚与拱顶的宽度，两截按同一比例画', x0 + 18, dy + 14)
+
+    const barH = clamp(sNat * 1.1, 12, 34)
+    const bandTop = dy + 28
+    const bandBot = y1 - 8 - 29           // 底下还留两行图注
+    const gap = clamp(bandBot - bandTop - 2 * barH, 16, 60)
+    const blockH = 2 * barH + gap
+    const bTop = bandTop + Math.max(0, (bandBot - bandTop - blockH) / 2)
+
+    const bars = [
+      { hw: HW, label: '拱顶 ' + (2 * HW).toFixed(2) + ' m' },
+      { hw: B.HW_SPRING, label: '拱脚 ' + (2 * B.HW_SPRING).toFixed(2) + ' m' }
+    ]
+    ctx.font = '10px sans-serif'
+    ctx.textBaseline = 'middle'
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i]
+      const y = bTop + i * (barH + gap)
+      const xa = cx - b.hw * mp.s, xb = cx + b.hw * mp.s
+      ctx.fillStyle = '#9aa4aa'
+      ctx.fillRect(xa, y, xb - xa, barH)
+      ctx.strokeStyle = 'rgba(50,60,68,0.75)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(xa + 0.5, y + 0.5, xb - xa - 1, barH - 1)
+      // 28 道。条子横着不到三百像素，缝得真画出来，数才对得上
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)'
+      ctx.beginPath()
+      for (let k = 1; k < B.RING_N; k++) {
+        const x = xa + (xb - xa) * k / B.RING_N
+        ctx.moveTo(x, y + 1.5); ctx.lineTo(x, y + barH - 1.5)
+      }
+      ctx.stroke()
+      // 字压在一块清干净的底上，否则那道道的白缝从字上穿过去
+      const lw = ctx.measureText(b.label).width
+      ctx.fillStyle = '#9aa4aa'
+      ctx.fillRect(xa + 6, y + 1, lw + 4, barH - 2)
+      ctx.fillStyle = 'rgba(255,255,255,0.95)'
+      ctx.fillText(b.label, xa + 8, y + barH / 2 + 0.5)
+    }
+
+    // 两道宽度之差。两根条子都居中，右边那一小段就是差值本身——
+    // 0.30 m 在这个比例下只有九个像素，字挤不进两根端头之间，落到图注里写
+    const y1c = bTop + barH / 2
+    const y2c = bTop + barH + gap + barH / 2
+    const e1 = cx + HW * mp.s
+    const e2 = cx + B.HW_SPRING * mp.s + 6
+    ctx.strokeStyle = RED
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(e1, y1c); ctx.lineTo(e2, y1c)
+    ctx.moveTo(e1, y2c); ctx.lineTo(e2, y2c)
+    ctx.moveTo(e2, y1c); ctx.lineTo(e2, y2c)
+    ctx.moveTo(e1, y1c - 3); ctx.lineTo(e1, y1c + 3)
+    ctx.moveTo(e2, y1c - 3); ctx.lineTo(e2, y1c + 3)
+    ctx.moveTo(e2, y2c - 3); ctx.lineTo(e2, y2c + 3)
+    ctx.stroke()
+
+    const cap2Y = bTop + blockH + 14
+    ctx.font = '10px sans-serif'
+    ctx.fillStyle = 'rgba(70,58,44,0.74)'
+    ctx.fillText('拱脚比拱顶每侧宽 ' + (B.HW_SPRING - HW).toFixed(2) + ' m（全宽 ' +
+      (2 * B.HW_SPRING).toFixed(2) + ' m 对 ' + (2 * HW).toFixed(2) + ' m）', x0 + 20, cap2Y)
+    ctx.fillStyle = 'rgba(70,58,44,0.5)'
+    ctx.fillText('各道券自两端向中部逐层收窄、彼此挤紧——此即「收分」，也叫蜂腰', x0 + 20, cap2Y + 15)
+  },
+
+  /**
+   * 卡片底下的图注。头一行深、后面浅——说课时眼睛先落在第一行，
+   * 后面几行是补充说明。原先每张图各写各的 fillStyle 与 y+15，
+   * 六张图就是六份，收成一处。
+   */
+  secNotes(ctx, x, y, notes) {
+    ctx.textAlign = 'left'
+    ctx.font = '10px sans-serif'
+    for (let i = 0; i < notes.length; i++) {
+      ctx.fillStyle = i === 0 ? 'rgba(70,58,44,0.74)' : 'rgba(70,58,44,0.5)'
+      ctx.fillText(notes[i], x, y + i * 15)
+    }
+  },
+
+  /**
+   * 过水断面图。水位当横轴，桥下净过水面积当纵轴，一张图上两条线：
+   * 敞肩（真桥，四个小拱凿穿）与实肩（假想的同形实肩桥，拱肩砌实）。
+   *
+   * 两条线之间那一块，就是四个小拱真正让出来的断面。它不是估的——
+   * 两条线都由 hydro.js 的 areaAt 按桥的几何积出来，与泄洪动画里
+   * 水面爬升读的是同一张表。说课时推一推滑块，游标跟着走，
+   * 「敞肩之利」就从一句话变成图上一块量得出来的面积。
+   *
+   * 两条临界线标在**洞口的最低点**（SMALL[].sill）上，红线正是在那里
+   * 离开土黄线的——越过哪一道，哪一对小拱开始过水。
+   *
+   * 别把它和滑块上那三档的分界混作一处：滑块的分界画在**起拱线**
+   * （SMALL[].spring）上，那是一对小拱整孔开始泄水的档位，比起洞口
+   * 见水晚得多（外侧那对：起拱线 3.91 m 对洞底 0.98 m）。两个数都真，
+   * 指的是两件事，图上标的是前者、尺上标的是后者。
+   */
+  secArea(ctx, x0, x1, y0, y1, paper, red) {
+    const l = x0 + 58, r = x1 - 24
+    const t = y0 + 74, b = y1 - 96
+    const H0 = H.H_BED, H1 = B.DECK_CROWN
+    const AMAX = H.areaAt(H1, H.TABLE_OPEN)
+    const px = function (h) { return l + (h - H0) / (H1 - H0) * (r - l) }
+    const py = function (a) { return b - (a / AMAX) * (b - t) }
+
+    // ---- 格网。水位每 2 m 一道；面积按量级挑一个整数档 ----
+    ctx.font = '9px sans-serif'
+    for (let h = 0; h <= H1; h += 2) {
+      const X = px(h)
+      ctx.strokeStyle = 'rgba(158,132,96,0.18)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(X, t); ctx.lineTo(X, b); ctx.stroke()
+      ctx.textAlign = 'center'
+      ctx.fillStyle = 'rgba(70,58,44,0.5)'
+      ctx.fillText(String(h), X, b + 14)
+    }
+    const aStep = AMAX > 400 ? 200 : (AMAX > 180 ? 100 : 50)
+    ctx.textAlign = 'right'
+    for (let a = aStep; a < AMAX; a += aStep) {
+      const Y = py(a)
+      ctx.strokeStyle = 'rgba(158,132,96,0.14)'
+      ctx.beginPath(); ctx.moveTo(l, Y); ctx.lineTo(r, Y); ctx.stroke()
+      ctx.fillStyle = 'rgba(70,58,44,0.45)'
+      ctx.fillText(String(a), l - 7, Y)
+    }
+
+    // ---- 两条曲线 ----
+    const N = 90
+    const curve = function (table) {
+      const pts = []
+      for (let i = 0; i <= N; i++) {
+        const h = H0 + (H1 - H0) * (i / N)
+        pts.push([px(h), py(H.areaAt(h, table))])
+      }
+      return pts
+    }
+    const pOpen = curve(H.TABLE_OPEN)
+    const pSolid = curve(H.TABLE_SOLID)
+    const between = function (up, dn, fill) {
+      ctx.beginPath()
+      ctx.moveTo(up[0][0], up[0][1])
+      for (let i = 1; i < up.length; i++) ctx.lineTo(up[i][0], up[i][1])
+      for (let i = dn.length - 1; i >= 0; i--) ctx.lineTo(dn[i][0], dn[i][1])
+      ctx.closePath()
+      ctx.fillStyle = fill
+      ctx.fill()
+    }
+    // 先填实肩也有的那一块，再把两条线之间盖上去：
+    // 土黄＝实肩也有，朱红＝只有敞肩才有。两块一叠，差别就是颜色之差
+    between(pSolid, [[px(H0), b], [px(H1), b]], '#d6cbb2')
+    between(pOpen, pSolid, 'rgba(184,69,43,0.20)')
+
+    const line = function (pts, color, w) {
+      ctx.beginPath()
+      for (let i = 0; i < pts.length; i++) {
+        if (i === 0) ctx.moveTo(pts[i][0], pts[i][1]); else ctx.lineTo(pts[i][0], pts[i][1])
+      }
+      ctx.strokeStyle = color
+      ctx.lineWidth = w
+      ctx.stroke()
+    }
+    line(pSolid, 'rgba(122,108,84,0.85)', 1.3)
+    line(pOpen, red, 1.8)
+
+    // ---- 轴。河床那一档不在整米格上，单独勒一道并标出来 ----
+    ctx.strokeStyle = 'rgba(120,100,70,0.55)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(l, t); ctx.lineTo(l, b); ctx.lineTo(r, b)
+    ctx.moveTo(px(H0), t); ctx.lineTo(px(H0), b)
+    ctx.stroke()
+    ctx.textAlign = 'left'
+    ctx.font = '9px sans-serif'
+    ctx.fillStyle = 'rgba(70,58,44,0.5)'
+    ctx.fillText('河床', px(H0) + 4, b + 14)
+    ctx.fillStyle = 'rgba(70,58,44,0.55)'
+    ctx.fillText('桥下净过水面积 m²', x0 + 16, t - 10)
+
+    // ---- 两条临界线：水位越过它，那一对小拱才开始过水 ----
+    // 取洞底最低点（sill）而不是起拱线（spring）：红线正是从这里离开
+    // 土黄那条曲线的，拐点就在线上。若画在起拱线上，线会比拐点靠右
+    // 两米多，看着像是"过了线才慢慢开始"，其实早就分岔了。
+    ctx.strokeStyle = 'rgba(96,138,160,0.9)'
+    ctx.lineWidth = 1.2
+    ctx.beginPath()
+    for (let k = 0; k < B.SMALL.length; k++) {
+      const X = px(B.SMALL[k].sill)
+      if (X <= l + 2 || X >= r - 2) continue
+      for (let yy = t; yy < b; yy += 7) {
+        ctx.moveTo(X, yy); ctx.lineTo(X, Math.min(b, yy + 4))
+      }
+    }
+    ctx.stroke()
+
+    // ---- 此刻的水位。滑块一推，这道游标跟着走 ----
+    const ev = H.evaluate(this.data.q)
+    const hNow = ev.open.h
+    if (hNow > H0) {
+      const X = px(hNow)
+      const aOpen = H.areaAt(hNow, H.TABLE_OPEN)
+      const aSolid = H.areaAt(hNow, H.TABLE_SOLID)
+      const dBonus = spandrelBonus(hNow)
+      ctx.strokeStyle = 'rgba(184,69,43,0.7)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(X, py(aOpen)); ctx.lineTo(X, b); ctx.stroke()
+      ctx.fillStyle = red
+      ctx.beginPath(); ctx.arc(X, py(aOpen), 3, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#7a6c54'
+      ctx.beginPath(); ctx.arc(X, py(aSolid), 2.4, 0, Math.PI * 2); ctx.fill()
+
+      // 读数压在左上角：曲线自左下爬向右上，那一块始终空着
+      const lines = [
+        '水位 ' + hNow.toFixed(2) + ' m',
+        '敞肩 ' + aOpen.toFixed(0) + ' m²',
+        '实肩 ' + aSolid.toFixed(0) + ' m²',
+        '多让 ' + dBonus.toFixed(0) + ' m²'
+      ]
+      const bw = 98, bh = lines.length * 12 + 8
+      ctx.fillStyle = 'rgba(248,243,232,0.92)'
+      this.roundRect(ctx, l + 6, t + 6, bw, bh, 4); ctx.fill()
+      ctx.strokeStyle = 'rgba(158,132,96,0.4)'
+      this.roundRect(ctx, l + 6.5, t + 6.5, bw - 1, bh - 1, 4); ctx.stroke()
+      ctx.textAlign = 'left'
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillStyle = i === 1 ? red : 'rgba(70,58,44,0.78)'
+        ctx.fillText(lines[i], l + 14, t + 14 + i * 12)
+      }
+    }
+
+    // ---- 图例。压在右下角——曲线在那里已经爬到右上，这块空着 ----
+    const lg = [[red, '敞肩（真桥）'], ['rgba(122,108,84,0.9)', '实肩（假想）']]
+    const lw = 106, lh = 30
+    const lx = r - lw - 6, ly = b - lh - 8
+    ctx.fillStyle = 'rgba(248,243,232,0.92)'
+    this.roundRect(ctx, lx, ly, lw, lh, 4); ctx.fill()
+    ctx.font = '9px sans-serif'
+    ctx.textAlign = 'left'
+    for (let i = 0; i < lg.length; i++) {
+      const yy = ly + 9 + i * 13
+      ctx.strokeStyle = lg[i][0]; ctx.lineWidth = 1.8
+      ctx.beginPath(); ctx.moveTo(lx + 7, yy); ctx.lineTo(lx + 22, yy); ctx.stroke()
+      ctx.fillStyle = 'rgba(70,58,44,0.74)'
+      ctx.fillText(lg[i][1], lx + 27, yy)
+    }
+
+    this.secNotes(ctx, x0 + 16, b + 34, [
+      '朱红＝敞肩比实肩多让出来的水：四个小拱凿穿的净断面，沿桥长积分',
+      '土黄＝同形实肩桥也能过的断面。两块之差就是「敞肩之利」的量',
+      '横轴水位 m（河床 −1.00 m 起算），纵轴桥下净过水面积 m²',
+      // 说法得跟着线走：线画在洞底最低点，就不该说成起拱线。
+      // 洞口底边是斜的主拱外弧，最低点比起拱线低两三米
+      '两道蓝虚线是内外两对小拱洞口的最低点，水位越过它，那一对开始过水'
+    ])
+  },
+
+  /**
+   * 拱券分解图。两件事常被混成一件，这张图把它们分开：
+   *   上——「一道券自己」由许多块券石沿弧砌成一条石链，缝口里嵌银锭形
+   *       的腰铁，把相邻两块锁住。腰铁管的是**本券之内**。
+   *   下——「28 道券」凭什么成为一个整体：护拱石压顶、铁拉杆横穿。
+   *       这两样管的是**券与券之间**。第三样横向联系是勾石，它在拱肩
+   *       那一段而不在拱顶，这一刀切不到，只写进图注。
+   *
+   * 上图是拱顶那一段券身的立面，石缝按 0.35 m 一块照实排；
+   * 下图在拱顶把桥横着切开，28 道券按真宽一道不省略。
+   */
+  secRings(ctx, x0, x1, y0, y1, paper, red) {
+    const INK = 'rgba(50,60,68,0.75)'
+    // 拱上任意一点：角 φ 处的半径与切向。φ 以拱顶为 0，朝 +x 为正
+    const at = function (phi, r) {
+      return [r * Math.sin(phi), B.CY + r * Math.cos(phi)]
+    }
+
+    // ---------------- 上半：拱顶一段券身的立面 ----------------
+    // 横向取 ±5.5 m：刚好容下拱顶那道腰铁，以及两侧各约 5 m 处的
+    // 另两道——3D 里 7 处腰铁就排在这个间距上，两张图的铁活对得上
+    const aTop = y0 + 76
+    const aBot = y0 + (y1 - y0) * 0.38
+    const mpA = this.secMap(-5.5, 5.5, 6.60, 8.44, x0 + 26, x1 - 26, aTop, aBot)
+    // 注意 mp.p 收的是两个数 (x, y)，不是一个点数组——at() 返回的得拆开传，
+    // 否则 y 是 undefined，整批石缝和腰铁都投到 NaN 上，画出来什么都没有
+    const PA = function (phi, r) {
+      const q = at(phi, r)
+      return mpA.p(q[0], q[1])
+    }
+
+    // 券身。两头竖直切断——这是"取了一段来看"，不是券到此为止
+    this.bandBetween(ctx, mpA, {
+      x0: -5.52, x1: 5.52, n: 48,
+      fwd: B.archIntrados, back: B.archExtrados,
+      fill: '#9aa4aa', stroke: INK
+    })
+
+    // 券石缝。沿弧每 0.35 m 一道，方向是径向——券石正是这么一块块砌上去的
+    const STONE = 0.35
+    const dphi = STONE / B.R_IN
+    const nJ = Math.floor(Math.asin(5.52 / B.R_IN) / dphi)
+    ctx.strokeStyle = 'rgba(44,54,62,0.62)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (let i = -nJ; i <= nJ; i++) {
+      const phi = i * dphi
+      const p0 = PA(phi, B.R_IN), p1 = PA(phi, B.R_OUT)
+      ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1])
+    }
+    ctx.stroke()
+
+    // 腰铁。银锭形，长轴顺弧、骑在券石缝上。位置取 3D 里那 7 处
+    // （u = 0, ±0.25…）中最靠拱顶的三个，两张图的铁活落在同一处。
+    // 真腰铁长约 0.20 m，这里按 0.44 m 画——照实画不到三像素，看不出
+    // 是个什么物件。资料页「腰铁」一条已注明本模型只画位置
+    const IRON = [
+      [-0.22, -0.080], [-0.22, 0.080], [-0.062, 0.035], [0.062, 0.035],
+      [0.22, 0.080], [0.22, -0.080], [0.062, -0.035], [-0.062, -0.035]
+    ]
+    const U = [0, 0.25, -0.25]
+    for (let k = 0; k < U.length; k++) {
+      // 挪到最近的那道石缝上——腰铁是骑缝的，不落在石头当中
+      const ph = Math.round(U[k] * B.HALF_TH / dphi) * dphi
+      const ux = Math.sin(ph), uy = Math.cos(ph)
+      const tx = Math.cos(ph), ty = -Math.sin(ph)
+      // 嵌在券背以里 0.22 m 处，不是浮在面上——图上读作"埋进石头里的铁"
+      const c = at(ph, B.R_OUT - 0.22)
+      ctx.beginPath()
+      for (let m = 0; m < IRON.length; m++) {
+        const q = mpA.p(c[0] + tx * IRON[m][0] + ux * IRON[m][1],
+          c[1] + ty * IRON[m][0] + uy * IRON[m][1])
+        if (m === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1])
+      }
+      ctx.closePath()
+      ctx.fillStyle = '#4c4845'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(248,243,232,0.75)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+    }
+
+    this.secNotes(ctx, x0 + 16, aBot + 16, [
+      '一道券：0.35 m 一块券石沿弧砌到拱脚，缝口里嵌银锭形腰铁',
+      '腰铁骑在两块券石之间，沿弧约 5 m 一处——它管的是这一道券自己的石链'
+    ])
+
+    // ---------------- 下半：拱顶横切，28 道券按真宽并列 ----------------
+    const bTop = aBot + 44
+    const bBot = y1 - 78
+    const HW = B.HW_CROWN
+    const zIn = B.archIntrados(0), zOut = B.archExtrados(0)
+    const zHau = B.haunchTop(0)
+    const cw = 2 * HW / B.RING_N
+    const mpB = this.secMap(-HW - 0.55, HW + 0.55, zIn - 1.0, zHau + 0.66,
+      x0 + 40, x1 - 40, bTop, bBot)
+    const PB = mpB.p
+    const rect = function (xa, xb, za, zb, fill, stroke) {
+      const p0 = PB(xa, za), p1 = PB(xb, zb)
+      ctx.beginPath()
+      ctx.rect(Math.min(p0[0], p1[0]), Math.min(p0[1], p1[1]),
+        Math.abs(p1[0] - p0[0]), Math.abs(p1[1] - p0[1]))
+      ctx.fillStyle = fill
+      ctx.fill()
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke() }
+    }
+
+    // 28 道券。按真宽一道挨一道画：缝是切出来的，不是留出来的。
+    // 这一档比例下每道不到十像素、缝只有一像素宽，所以描边要比别处重
+    for (let i = 0; i < B.RING_N; i++) {
+      rect(-HW + i * cw, -HW + (i + 1) * cw, zIn, zOut, '#9aa4aa', 'rgba(40,50,58,0.72)')
+    }
+    // 护拱石压在 28 道券的背上，把它们连成一条
+    rect(-HW, HW, zOut, zHau, '#bcb19d', INK)
+
+    // 铁拉杆。它在拱顶这一刀里顺着纸面走，所以是一根杆，不是断面的点
+    const zTie = B.CY + B.R_OUT + 0.18
+    rect(-HW - 0.34, HW + 0.34, zTie - 0.075, zTie + 0.075, '#4c4845', null)
+    for (let sg = -1; sg <= 1; sg += 2) {
+      const c = PB(sg * (HW + 0.34), zTie)
+      ctx.beginPath(); ctx.arc(c[0], c[1], 2.4, 0, Math.PI * 2)
+      ctx.fillStyle = '#4c4845'; ctx.fill()
+      ctx.strokeStyle = paper; ctx.lineWidth = 1.2; ctx.stroke()
+    }
+
+    // 桥宽横着量。字压在券脚底下那片空档里
+    ctx.font = '10px sans-serif'
+    this.secDim(ctx, mpB, -HW, zIn - 0.55, HW, zIn - 0.55,
+      '拱顶全宽 ' + (2 * HW).toFixed(2) + ' m　28 道 × ' + cw.toFixed(2) + ' m', red, paper)
+
+    this.secNotes(ctx, x0 + 16, bBot + 20, [
+      '28 道券并排放着，背上一齐压着护拱石；铁拉杆横穿，两端露出圆帽',
+      '勾石是第三样横向联系，在拱肩那一段，这一刀切不到——见 3D 拆解'
+    ])
+  },
+
+  /**
+   * 敞肩与实肩的对照。同一张图里上下摞两座桥：上面是真桥（敞肩），
+   * 下面是假想的同形实肩桥——拱肩砌实，四个小拱不存在。
+   *
+   * 两座用的是同一个 secProfile，只差一个 solid 开关，所以桥形、
+   * 桥面、栏板处处对齐，看上去的差别就只是那四个洞。这正是要讲的：
+   * 省下的石料和多走的洪水，全从那四个洞里来。
+   */
+  secSpan(ctx, x0, x1, y0, y1, paper, red) {
+    const DY = -11.6                       // 下面那座整体下沉这么多米
+    const aTop = y0 + 78
+    const aBot = y1 - 92
+    const mp = this.secMap(-20, 20, DY - 0.4, 11.2, x0 + 24, x1 - 24, aTop, aBot)
+
+    // 上：真桥。四个洞填成朱红浅底，就是"只有这儿有"的那一块
+    this.secProfile(ctx, mp, paper, { soil: false, hole: 'rgba(184,69,43,0.16)' })
+    // 下：实肩。同一个函数、同一份几何，只是不凿洞
+    this.secProfile(ctx, mp, paper, { soil: false, solid: true, dy: DY })
+
+    // 一条分隔线，免得两座桥看着像一座
+    const sep = mp.p(-20, DY + 11.2)
+    ctx.strokeStyle = 'rgba(158,132,96,0.35)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(x0 + 24, sep[1]); ctx.lineTo(x1 - 24, sep[1])
+    ctx.stroke()
+
+    // 两块牌子。都落在桥面之上那一片空处，压不到桥上
+    const t1 = mp.p(-20, 10.9)
+    this.tag(ctx, x0 + 78, t1[1] + 12, '敞肩 · 真桥', '#fdf6ec', 'rgba(158,62,40,0.88)')
+    const t2 = mp.p(-20, 10.9 + DY)
+    this.tag(ctx, x0 + 78, t2[1] + 12, '实肩 · 假想', '#fdf6ec', 'rgba(110,100,86,0.9)')
+
+    // 两块量出来的数：省下的石料，与此刻多走的洪水
+    const ev = H.evaluate(this.data.q)
+    const dA = spandrelBonus(ev.open.h)
+    const dH = ev.solid.h - ev.open.h
+    this.secNotes(ctx, x0 + 24, y1 - 74, [
+      '四个小拱凿掉 ' + B.SPANDREL.voidVol.toFixed(0) + ' m³ 石料，约 ' +
+        (Math.round(B.SPANDREL.stone / 10) * 10) + ' 吨，占主拱拱肩断面的 ' +
+        (B.SPANDREL.share * 100).toFixed(0) + '%',
+      '同一水位下多让出 ' + dA.toFixed(0) + ' m² 过水断面；过同样的 ' +
+        this.data.q + ' m³/s，洪水位因此低 ' + dH.toFixed(2) + ' m',
+      '两座桥走同一个 secProfile，只差一个「凿不凿洞」的开关'
+    ])
+  },
+
+  /**
+   * 桥台与基础构造图。把纵剖面里那张小大样放到整张卡片上——
+   * 那一截总共 3.15 m 高，在全桥尺度上不到二十像素，不说清楚，
+   * 「赵州桥为什么能站住」这一问就答不到点子上：它没有打桩，
+   * 直接把五层条石坐在河床的粗砂层上。
+   *
+   * 画法与尺寸仍走 secProfile / secDimInset，与纵剖面是同一份几何、
+   * 同一份数字，两张图不会各说各的。
+   */
+  secFound(ctx, x0, x1, y0, y1, paper, red) {
+    const aTop = y0 + 80
+    const aBot = y1 - 118
+    const mp = this.secMap(-27.6, -17.1, -4.4, 2.9, x0 + 22, x1 - 22, aTop, aBot)
+
+    this.secProfile(ctx, mp, paper)
+    this.secDimInset(ctx, mp, red, paper)
+
+    // 地层。砂层没有画成另一块土——模型里它就是同一层土，
+    // 这里只用一行字和一个引到河床上的短标记说明它是什么
+    const P = mp.p
+    const bed = P(-21.0, B.BED_Y)
+    ctx.strokeStyle = 'rgba(120,100,70,0.75)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(bed[0] - 26, bed[1]); ctx.lineTo(bed[0] - 8, bed[1])
+    ctx.stroke()
+    ctx.textAlign = 'right'
+    ctx.font = '10px sans-serif'
+    ctx.fillStyle = 'rgba(70,58,44,0.7)'
+    ctx.fillText('河床面', bed[0] - 30, bed[1])
+    const sand = P(-25.4, -3.6)
+    ctx.textAlign = 'left'
+    ctx.fillText('粗砂层', sand[0], sand[1])
+
+    this.secNotes(ctx, x0 + 22, y1 - 96, [
+      '桥台长 ' + B.ABUT_LEN.toFixed(1) + ' m，台顶就是起拱线，' +
+        '台身下接 ' + B.FOUND_N + ' 层条石，共 ' + (B.FOUND_N * B.FOUND_T).toFixed(2) + ' m',
+      '条石底面标高 ' + B.FOUND_BOT.toFixed(2) + ' m，比河床还低 ' +
+        (B.BED_Y - B.FOUND_BOT).toFixed(2) + ' m——整摞基础埋在河床以下',
+      '天然地基，未打桩。粗砂层排水快、沉降小，是它能站住一千四百年的底子'
+    ])
   },
 
   /**
@@ -1459,14 +2194,80 @@ Page({
   },
 
   /**
+   * 两条函数曲线之间那条带子。剖面图上石作的每一块都是这个形状：
+   * 护拱石、主拱券、拱肩侧墙、桥面、栏板，还有凿出来的四个小拱洞——
+   * 差别只在取哪两条边界、在哪个横向上取样、填什么色。
+   *
+   * 取样是"去程走一条、回程走另一条"，两条曲线不必分出谁上谁下：
+   * 两趟合起来正好是这个闭合区域的轮廓，而 fill() 只看轮廓、
+   * 不看绕序。所以拱券那一块可以拿内弧当去程、外弧当回程，
+   * 名称不必别过来。
+   *
+   * 原先每一块都把"正着走一遍、倒着走一遍、closePath、fill、stroke"
+   * 抄一遍，六份抄下来，改一处边界就得记住还有五处等着改。
+   */
+  bandBetween(ctx, mp, o) {
+    const P = mp.p
+    const n = o.n || 64
+    const step = (o.x1 - o.x0) / n
+    ctx.beginPath()
+    for (let i = 0; i <= n; i++) {
+      const p = P(o.x0 + step * i, o.fwd(o.x0 + step * i))
+      if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1])
+    }
+    for (let i = n; i >= 0; i--) {
+      const p = P(o.x0 + step * i, o.back(o.x0 + step * i))
+      ctx.lineTo(p[0], p[1])
+    }
+    ctx.closePath()
+    ctx.fillStyle = o.fill
+    ctx.fill()
+    if (o.stroke) {
+      ctx.strokeStyle = o.stroke
+      ctx.lineWidth = o.lw || 1
+      ctx.stroke()
+    }
+  },
+
+  /**
+   * 地面线：在 [XL, XR] 上按 groundY 走一条。调用方自己决定是
+   * closePath 之后填成土、还是就这么描一道线——制图习惯上地面线要
+   * 一路穿过去，埋在地下的桥台和基础也照穿，"埋多深"这才读得出来。
+   */
+  groundPath(ctx, mp, XL, XR) {
+    const P = mp.p
+    const n = 90
+    ctx.beginPath()
+    for (let i = 0; i <= n; i++) {
+      const x = XL + (XR - XL) * (i / n)
+      const p = P(x, B.groundY(Math.abs(x)))
+      if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1])
+    }
+  },
+
+  /**
    * 一张剖面的石作部分。全桥和桥台大样共用这一份画法——大样只是换了个
    * map，几何一模一样，两张图不会出现对不上的地方。
    *
    * 画的次序就是砌的次序：先铺土，再桥台与基础，再拱券与护拱石，
    * 再拱肩侧墙，然后把四个小拱的洞凿出来，最后铺桥面、勒地面线。
+   *
+   * opt（可省）：
+   *   solid  不凿四个小拱——画出假想的那座同形实肩桥，「敞肩对照」要用
+   *   soil   关掉土、桥台、基础，只留桥身石作。对照那张一上一下摞两座桥，
+   *          带上地基就成了两坨土，比不出什么
+   *   dy     整座桥抬高 dy 米。同上：一个 map 里上下摞两座，靠这个错开
+   *   hole   四个小拱的洞填什么色。默认填纸色；对照那张填一层朱红浅底，
+   *          指出"只有这里有"的那一块
    */
-  secProfile(ctx, mp, paper) {
+  secProfile(ctx, mp, paper, opt) {
+    const o = opt || {}
     const P = mp.p
+    const dy = o.dy || 0
+    // 上下摞两座桥时，边界函数统一垫高一档，省得每处各写一遍 +dy
+    const sh = function (f) {
+      return dy ? function (x) { return f(x) + dy } : f
+    }
     // 地面线只在本画幅自己的横向上取样，这是第一层保险
     const XL = mp.wx0 - 2, XR = mp.wx1 + 2
     const INK = 'rgba(64,54,42,0.6)'
@@ -1481,197 +2282,124 @@ Page({
     ctx.clip()
 
     // ---- 土：河床与两岸 ----
-    ctx.beginPath()
-    let q = P(XL, B.groundY(Math.abs(XL)))
-    ctx.moveTo(q[0], q[1])
-    for (let i = 1; i <= 90; i++) {
-      const x = XL + (XR - XL) * (i / 90)
-      q = P(x, B.groundY(Math.abs(x)))
+    if (o.soil !== false) {
+      this.groundPath(ctx, mp, XL, XR)
+      let q = P(XR, mp.wy0)
+      // 收在画幅自己的底边上，不是卡片底边：两块画幅上下相邻，
+      // 土要是一直铺到卡片底，下面那张大样和图注就全埋在土里了
       ctx.lineTo(q[0], q[1])
-    }
-    // 收在画幅自己的底边上，不是卡片底边：两块画幅上下相邻，
-    // 土要是一直铺到卡片底，下面那张大样和图注就全埋在土里了
-    q = P(XR, mp.wy0); ctx.lineTo(q[0], q[1])
-    q = P(XL, mp.wy0); ctx.lineTo(q[0], q[1])
-    ctx.closePath()
-    ctx.fillStyle = '#ded2b6'
-    ctx.fill()
-
-    // ---- 桥台。台身从起拱线砌到 -1.60 m ----
-    for (let sg = -1; sg <= 1; sg += 2) {
-      const a = P(sg * B.ABUT_X0, B.ABUT_BOT), b = P(sg * B.ABUT_X1, B.ABUT_BOT)
-      const c = P(sg * B.ABUT_X1, B.ABUT_TOP), d = P(sg * B.ABUT_X0, B.ABUT_TOP)
-      ctx.beginPath()
-      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
-      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1])
+      q = P(XL, mp.wy0); ctx.lineTo(q[0], q[1])
       ctx.closePath()
-      ctx.fillStyle = '#a9a294'
+      ctx.fillStyle = '#ded2b6'
       ctx.fill()
-      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke()
-    }
 
-    // ---- 五层条石基础。每层向外出台 0.06 m，深浅相间才数得出"五" ----
-    for (let sg = -1; sg <= 1; sg += 2) {
-      for (let i = 0; i < B.FOUND_N; i++) {
-        const yy1 = B.ABUT_BOT - i * B.FOUND_T
-        const yy0 = yy1 - B.FOUND_T
-        const xa = sg * (B.ABUT_X0 - 0.10 - i * 0.06)
-        const xb = sg * (B.ABUT_X1 + 0.18 + i * 0.06)
-        const a = P(xa, yy0), b = P(xb, yy0), c = P(xb, yy1), d = P(xa, yy1)
+      // ---- 桥台。台身从起拱线砌到 -1.60 m ----
+      for (let sg = -1; sg <= 1; sg += 2) {
+        const a = P(sg * B.ABUT_X0, B.ABUT_BOT), b = P(sg * B.ABUT_X1, B.ABUT_BOT)
+        const c = P(sg * B.ABUT_X1, B.ABUT_TOP), d = P(sg * B.ABUT_X0, B.ABUT_TOP)
         ctx.beginPath()
         ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
         ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1])
         ctx.closePath()
-        ctx.fillStyle = i % 2 ? '#9a9284' : '#b0a897'
+        ctx.fillStyle = '#a9a294'
         ctx.fill()
-        ctx.strokeStyle = 'rgba(64,54,42,0.42)'
-        ctx.lineWidth = 1
-        ctx.stroke()
+        ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke()
+      }
+
+      // ---- 五层条石基础。每层向外出台 0.06 m，深浅相间才数得出"五" ----
+      for (let sg = -1; sg <= 1; sg += 2) {
+        for (let i = 0; i < B.FOUND_N; i++) {
+          const yy1 = B.ABUT_BOT - i * B.FOUND_T
+          const yy0 = yy1 - B.FOUND_T
+          const xa = sg * (B.ABUT_X0 - 0.10 - i * 0.06)
+          const xb = sg * (B.ABUT_X1 + 0.18 + i * 0.06)
+          const a = P(xa, yy0), b = P(xb, yy0), c = P(xb, yy1), d = P(xa, yy1)
+          ctx.beginPath()
+          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+          ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1])
+          ctx.closePath()
+          ctx.fillStyle = i % 2 ? '#9a9284' : '#b0a897'
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(64,54,42,0.42)'
+          ctx.lineWidth = 1
+          ctx.stroke()
+        }
       }
     }
 
     // ---- 护拱石。券背外面又贴的那一层，上边界就是拱背 ----
     const NH = 48
-    ctx.beginPath()
-    let f = true
-    for (let i = 0; i <= NH; i++) {
-      const x = -B.HALF_SPAN + 2 * B.HALF_SPAN * (i / NH)
-      const p = P(x, B.archExtrados(x))
-      if (f) { ctx.moveTo(p[0], p[1]); f = false } else ctx.lineTo(p[0], p[1])
-    }
-    for (let i = NH; i >= 0; i--) {
-      const x = -B.HALF_SPAN + 2 * B.HALF_SPAN * (i / NH)
-      const p = P(x, B.haunchTop(x))
-      ctx.lineTo(p[0], p[1])
-    }
-    ctx.closePath()
-    ctx.fillStyle = '#bcb19d'
-    ctx.fill()
-    ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke()
+    const AX = B.HALF_SPAN
+    this.bandBetween(ctx, mp, {
+      x0: -AX, x1: AX, n: NH,
+      fwd: sh(B.archExtrados), back: sh(B.haunchTop),
+      fill: '#bcb19d', stroke: INK
+    })
 
     // ---- 主拱券 ----
-    ctx.beginPath()
-    f = true
-    for (let i = 0; i <= NH; i++) {
-      const x = -B.HALF_SPAN + 2 * B.HALF_SPAN * (i / NH)
-      const p = P(x, B.archIntrados(x))
-      if (f) { ctx.moveTo(p[0], p[1]); f = false } else ctx.lineTo(p[0], p[1])
-    }
-    for (let i = NH; i >= 0; i--) {
-      const x = -B.HALF_SPAN + 2 * B.HALF_SPAN * (i / NH)
-      const p = P(x, B.archExtrados(x))
-      ctx.lineTo(p[0], p[1])
-    }
-    ctx.closePath()
-    ctx.fillStyle = '#9aa4aa'
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(50,60,68,0.75)'; ctx.lineWidth = 1; ctx.stroke()
+    this.bandBetween(ctx, mp, {
+      x0: -AX, x1: AX, n: NH,
+      fwd: sh(B.archIntrados), back: sh(B.archExtrados),
+      fill: '#9aa4aa', stroke: 'rgba(50,60,68,0.75)'
+    })
 
     // ---- 拱肩侧墙。下边界跟着拱背走，到桥台段落在起拱线上，
     //      再往外顺岸坡爬上去；上边界就是桥面底 ----
-    const NW = 220
-    ctx.beginPath()
-    f = true
-    for (let i = 0; i <= NW; i++) {
-      const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / NW)
-      const p = P(x, B.wallBottom(x))
-      if (f) { ctx.moveTo(p[0], p[1]); f = false } else ctx.lineTo(p[0], p[1])
-    }
-    for (let i = NW; i >= 0; i--) {
-      const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / NW)
-      const p = P(x, B.deckBottom(x))
-      ctx.lineTo(p[0], p[1])
-    }
-    ctx.closePath()
-    ctx.fillStyle = '#c3bcac'
-    ctx.fill()
-    ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke()
+    this.bandBetween(ctx, mp, {
+      x0: -B.DECK_HALF, x1: B.DECK_HALF, n: 220,
+      fwd: sh(B.wallBottom), back: sh(B.deckBottom),
+      fill: '#c3bcac', stroke: INK
+    })
 
     // ---- 凿出四个小拱。下边界是拱背（起拱线本来就取在拱背上），上边界是
     //      券脸；凿完之后，剩下那圈石料里自然就含着券自己的厚度 ----
-    for (let k = 0; k < B.SMALL.length; k++) {
+    for (let k = 0; !o.solid && k < B.SMALL.length; k++) {
       const sm = B.SMALL[k]
       for (let sg = -1; sg <= 1; sg += 2) {
-        const NC = 20
-        ctx.beginPath()
-        for (let i = 0; i <= NC; i++) {
-          const x = sg * (sm.x0 + (sm.x1 - sm.x0) * (i / NC))
-          const p = P(x, B.haunchTop(x))
-          if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1])
-        }
-        for (let i = NC; i >= 0; i--) {
-          const x = sg * (sm.x0 + (sm.x1 - sm.x0) * (i / NC))
-          const p = P(x, B.smallIntrados(sm, x))
-          ctx.lineTo(p[0], p[1])
-        }
-        ctx.closePath()
-        ctx.fillStyle = paper
-        ctx.fill()
-        ctx.strokeStyle = 'rgba(50,60,68,0.7)'
-        ctx.lineWidth = 1
-        ctx.stroke()
+        // sg = -1 那一侧 x0 > x1，区间是倒着走的。bandBetween 只认两端点、
+        // 不认方向，倒着走画出来是一样的
+        this.bandBetween(ctx, mp, {
+          x0: sg * sm.x0, x1: sg * sm.x1, n: 20,
+          fwd: sh(B.haunchTop),
+          back: function (x) { return B.smallIntrados(sm, x) + dy },
+          fill: o.hole || paper, stroke: 'rgba(50,60,68,0.7)'
+        })
       }
     }
 
     // ---- 桥面 ----
     const ND = 64
-    ctx.beginPath()
-    f = true
-    for (let i = 0; i <= ND; i++) {
-      const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / ND)
-      const p = P(x, B.deckTop(x))
-      if (f) { ctx.moveTo(p[0], p[1]); f = false } else ctx.lineTo(p[0], p[1])
-    }
-    for (let i = ND; i >= 0; i--) {
-      const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / ND)
-      const p = P(x, B.deckBottom(x))
-      ctx.lineTo(p[0], p[1])
-    }
-    ctx.closePath()
-    ctx.fillStyle = '#cfc9bb'
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(64,54,42,0.75)'; ctx.lineWidth = 1; ctx.stroke()
+    this.bandBetween(ctx, mp, {
+      x0: -B.DECK_HALF, x1: B.DECK_HALF, n: ND,
+      fwd: sh(B.deckTop), back: sh(B.deckBottom),
+      fill: '#cfc9bb', stroke: 'rgba(64,54,42,0.75)'
+    })
 
     // ---- 栏板望柱。它们立在桥面两侧，中线剖面上本来照不见，按制图习惯
     //      补一道浅色可见轮廓，顺带把 21 块栏板的缝也勒出来 ----
-    const rTop = function (x) { return B.deckTop(x) + 0.95 }
-    ctx.beginPath()
-    f = true
-    for (let i = 0; i <= ND; i++) {
-      const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / ND)
-      const p = P(x, B.deckTop(x))
-      if (f) { ctx.moveTo(p[0], p[1]); f = false } else ctx.lineTo(p[0], p[1])
-    }
-    for (let i = ND; i >= 0; i--) {
-      const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / ND)
-      const p = P(x, rTop(x))
-      ctx.lineTo(p[0], p[1])
-    }
-    ctx.closePath()
-    ctx.fillStyle = 'rgba(196,188,174,0.9)'
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(64,54,42,0.5)'; ctx.lineWidth = 1; ctx.stroke()
+    const rTop = sh(function (x) { return B.deckTop(x) + 0.95 })
+    this.bandBetween(ctx, mp, {
+      x0: -B.DECK_HALF, x1: B.DECK_HALF, n: ND,
+      fwd: sh(B.deckTop), back: rTop,
+      fill: 'rgba(196,188,174,0.9)', stroke: 'rgba(64,54,42,0.5)'
+    })
     ctx.strokeStyle = 'rgba(64,54,42,0.24)'
     ctx.beginPath()
     for (let i = 1; i < B.RAIL_PANEL; i++) {
       const x = -B.DECK_HALF + 2 * B.DECK_HALF * (i / B.RAIL_PANEL)
-      const a = P(x, B.deckTop(x)), b = P(x, rTop(x))
+      const a = P(x, B.deckTop(x) + dy), b = P(x, rTop(x))
       ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
     }
     ctx.stroke()
 
     // ---- 地面线摆在最后：制图习惯上地面线要一路穿过去，埋在地下的
     //      桥台和基础也照穿，"埋多深"这才读得出来 ----
-    ctx.strokeStyle = 'rgba(120,100,70,0.62)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    f = true
-    for (let i = 0; i <= 90; i++) {
-      const x = XL + (XR - XL) * (i / 90)
-      const p = P(x, B.groundY(Math.abs(x)))
-      if (f) { ctx.moveTo(p[0], p[1]); f = false } else ctx.lineTo(p[0], p[1])
+    if (o.soil !== false) {
+      ctx.strokeStyle = 'rgba(120,100,70,0.62)'
+      ctx.lineWidth = 1
+      this.groundPath(ctx, mp, XL, XR)
+      ctx.stroke()
     }
-    ctx.stroke()
 
     ctx.restore()
   },
@@ -1728,10 +2456,10 @@ Page({
     // 桥上再没有比这更现成的一条线了。字挪到左半边，避开拱顶下方
     // 那道竖直的矢高线
     this.secDim(ctx, mp, -B.HALF_SPAN, 0, B.HALF_SPAN, 0,
-      '净跨 37.02 m', color, paper, -7.5, 1.15)
+      '净跨 ' + B.SPAN.toFixed(2) + ' m', color, paper, -7.5, 1.15)
 
     // 矢高。竖直那条线落在 x = 0，字压在线中间
-    this.secDim(ctx, mp, 0, 0, 0, B.RISE, '矢高 7.23 m', color, paper)
+    this.secDim(ctx, mp, 0, 0, 0, B.RISE, '矢高 ' + B.RISE.toFixed(2) + ' m', color, paper)
   },
 
   /** 桥台大样的尺寸 */
@@ -1741,7 +2469,8 @@ Page({
     const fBot = B.ABUT_BOT - B.FOUND_N * B.FOUND_T
 
     // 台身。尺寸线走在台顶之上、拱背之下那条空档里
-    this.secDim(ctx, mp, -B.ABUT_X1, 0.32, -B.ABUT_X0, 0.32, '台身 5.0 m', color, paper)
+    this.secDim(ctx, mp, -B.ABUT_X1, 0.32, -B.ABUT_X0, 0.32,
+      '台身 ' + B.ABUT_LEN.toFixed(1) + ' m', color, paper)
 
     // 五层条石。字贴在线左侧的画幅留白里，右端要停在埋深线之外，
     // 否则那道竖着的尺寸线会从字上穿过去
@@ -1793,7 +2522,7 @@ Page({
     ctx.fillStyle = 'rgba(255,255,255,0.82)'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
-    ctx.fillText('28 道拱券并列砌筑', x0, y0 - 15)
+    ctx.fillText(B.RING_N + ' 道拱券并列砌筑', x0, y0 - 15)
     ctx.restore()
   },
 
@@ -1846,21 +2575,31 @@ Page({
         areaPct: s.area > 1 ? ((o.area / s.area - 1) * 100).toFixed(1) : '0.0',
         hDown: (s.h - o.h).toFixed(2)
       }
-      // 内、外两对小拱的券脚不一样高（6.05 / 3.91 —— 各自落在主拱拱背上，
-      // 拱背越靠拱顶越高），所以是分级过水的：水先漫过外侧那对，
-      // 再涨 2 m 才够着内侧那对。这一条比百分比直观
+      // 内、外两对小拱不一样高（起拱线 6.05 / 3.91），所以是分级过水的：
+      // 水先够着外侧那对，再涨一截才轮到内侧那对。这一条比百分比直观。
+      //
+      // 每对分两个说法，因为洞口底下那条边是斜的（主拱外弧），
+      // 「水刚够着洞口最低点」和「水漫过券脚」差了将近 3 m：
+      //   过  水 —— 水位已过起拱线，整孔在泄
+      //   初漫洞底 —— 只漫过洞口最外侧那一条，刚开始过水
+      // 早先只有「过水 / 不过水」两态，判据是起拱线，于是水位 2.3 m 时
+      // 卡片上写着「尚无一孔过水」，紧挨着的「敞肩之利」却已经有 2 m² 了。
       const flowing = []
       for (let i = 0; i < B.SMALL.length; i++) {
-        if (o.h > B.SMALL[i].spring) {
-          flowing.push((i === 0 ? '内' : '外') + ' 2 个')
-        }
+        const s = B.SMALL[i]
+        const name = (i === 0 ? '内侧' : '外侧') + ' 2 个'
+        if (o.h > s.spring) flowing.push(name + '过水')
+        else if (o.h > s.sill) flowing.push(name + '初漫洞底')
       }
       // 同一水位下，敞肩桥比实肩桥多出来的那一块过水断面，
       // 就是此刻四个小拱真正让出来的净面积——敞肩拱的贡献值直接量出来了
-      const smallA = H.areaAt(o.h, H.TABLE_OPEN) - H.areaAt(o.h, H.TABLE_SOLID)
+      // 取整不带小数，是为了和剖面图那两张印出来的数一模一样。
+      // 三处（这里、过水断面、敞肩对照）本来都走 spandrelBonus，
+      // 若小数位各写各的，17.1 与 17 并排摆着，说课时还是要解释一遍
+      const smallA = spandrelBonus(o.h)
       const sp = {
         flowing: flowing.length ? flowing.join(' + ') : '尚无一孔过水',
-        nowArea: smallA.toFixed(1)
+        nowArea: smallA.toFixed(0)
       }
       if (sp.flowing !== this.data.sp.flowing ||
           sp.nowArea !== this.data.sp.nowArea) {
@@ -1877,9 +2616,12 @@ Page({
   // ==================== 交互 ====================
 
   onTouchStart(e) {
+    const ts = e.touches
+    // 剖面卡片顶上的页签是画在 canvas 里的，够不着 bindtap，只能在这里
+    // 认领。认领了就直接返回：这一下是点按钮，不是转桥
+    if (this.data.sec && ts.length === 1 && this.hitSecTab(ts[0])) return
     this.anim = null
     if (this.data.view !== 'free') this.setData({ view: 'free' })
-    const ts = e.touches
     if (ts.length >= 2) {
       this.pinch0 = this.touchDist(ts)
       this.zoom0 = this.cam.zoom
