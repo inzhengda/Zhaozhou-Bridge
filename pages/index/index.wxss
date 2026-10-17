@@ -144,6 +144,10 @@ page {
 .src-body {
   flex: 1;
   min-height: 0;
+  /* scroll-view 不吃父级的 overflow:hidden（iOS 原生层浮在 WebView 之上），
+     没有这行，左右 padding 会把盒子撑得比面板宽 56rpx，右缘顶出屏幕，
+     右栏文字和注释块整列被切——数据出处面板文字截断的根因就是它 */
+  box-sizing: border-box;
   padding: 16rpx 28rpx 28rpx;
 }
 
@@ -172,6 +176,9 @@ page {
 
 .src-v {
   flex: 1;
+  /* flex 项默认 min-width:auto，长文本（书名号、数字串）会把右栏撑出容器 */
+  min-width: 0;
+  word-break: break-word;
   font-size: 22rpx;
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.82);

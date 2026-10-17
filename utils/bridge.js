@@ -723,20 +723,25 @@ function sceneryMeshes() {
 
   // ---- 树：树干一个细盒，树冠一个八面体 ----
   const trunkC = [122, 94, 66]
-  const leafA = [116, 128, 82], leafB = [128, 138, 92]
+  const leafA = [106, 130, 72], leafB = [120, 144, 84]
   const tree = function (x, z, big) {
     const f1 = frac(Math.sin(x * 12.9 + z * 3.7) * 437.58)
     const f2 = frac(f1 * 91.7)
     const base = gY(x, z) - 0.15
-    const h = (1.5 + 0.9 * f1) * (big ? 1.5 : 1)
-    const r = (1.1 + 0.7 * f2) * (big ? 1.45 : 1)
+    // 河岸杨树本来就是十米上下的个子，比桥还高——桥边一排小灌木似的
+    // 树冠撑不起"河岸"这个词，全景里也根本看不见
+    const h = (2.6 + 1.4 * f1) * (big ? 1.6 : 1)
+    const r = (2.0 + 1.0 * f2) * (big ? 1.5 : 1)
     const tw = big ? 0.13 : 0.09
     mesh.box(greens, x - tw, x + tw, base, base + h, z - tw, z + tw, trunkC)
-    const cy = base + h + r * 0.62
     const leaf = f1 > 0.5 ? leafA : leafB
-    const T = [x, cy + r], Bm = [x, cy - r * 0.9]
-    const px = [x + r, cy, z], nx = [x - r, cy, z]
-    const pz = [x, cy, z + r], nz = [x, cy, z - r]
+    blob(x, base + h + r * 0.62, z, r, r, leaf)
+  }
+  // 八面体团块：树冠与灌木共用。ry 压扁了就是灌木，不用第二套几何
+  const blob = function (cx, cy, cz, rx, ry, leaf) {
+    const T = [cx, cy + ry], Bm = [cx, cy - ry]
+    const px = [cx + rx, cy, cz], nx = [cx - rx, cy, cz]
+    const pz = [cx, cy, cz + rx], nz = [cx, cy, cz - rx]
     mesh.face(greens, vertsOf(greens, [px, T, pz]), leaf)
     mesh.face(greens, vertsOf(greens, [pz, T, nx]), leaf)
     mesh.face(greens, vertsOf(greens, [nx, T, nz]), leaf)
@@ -746,19 +751,76 @@ function sceneryMeshes() {
     mesh.face(greens, vertsOf(greens, [nx, nz, Bm]), leaf)
     mesh.face(greens, vertsOf(greens, [nz, px, Bm]), leaf)
   }
-  // 河边一排（贴着常水位以上的岸坡），里侧一排错开
+  // 近岸坡（z 5~45）补密：转视角时这段坡是中前景，秃了最扎眼
   for (let sg = -1; sg <= 1; sg += 2) {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 4; i++) {
+      const z = 6 + i * 8 + 2 * frac(Math.sin(i * 9.7 + sg * 4) * 5.3)
+      tree(sg * (31.5 + 3.5 * frac(Math.sin(z * 0.53 - sg))), z, i % 2 === 0)
+    }
+    for (let i = 0; i < 3; i++) {
+      const f = frac(Math.sin(i * 13.7 + sg * 7) * 43.7)
+      const z = 10 + i * 11 + 3 * f
+      const bx = sg * (30 + 4 * frac(Math.sin(z * 0.61 + sg)))
+      const r = 0.7 + 0.6 * f
+      blob(bx, gY(bx, z) + r * 0.4, z, r, r * 0.55,
+        f > 0.5 ? [128, 142, 84] : [112, 134, 76])
+    }
+  }
+  // 河边一排（贴着常水位以上的岸坡），里侧一排错开，下游远处再补一条林带——
+  // 全景里对岸只有两排树还是显得秃，三层叠出纵深才像有人住的河岸
+  for (let sg = -1; sg <= 1; sg += 2) {
+    for (let i = 0; i < 9; i++) {
       const z = 8 - i * 11 - 3 * frac(Math.sin(i * 7.3 + sg) * 9.91)
       tree(sg * (30.2 + 2.6 * frac(Math.sin(z * 0.37 + sg * 2))), z, false)
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const z = 3 - i * 12 - 4 * frac(Math.sin(i * 4.9 - sg) * 6.77)
       tree(sg * (38 + 4 * frac(Math.sin(z * 0.29 - sg))), z, false)
+    }
+    for (let i = 0; i < 6; i++) {
+      const z = -40 - i * 12 - 5 * frac(Math.sin(i * 3.1 + sg) * 7.7)
+      tree(sg * (34 + 6 * frac(Math.sin(z * 0.31 - sg))), z, false)
     }
   }
   tree(-28.5, 6.5, true)
   tree(28.5, -6.5, true)
+  tree(-31, 26, true)
+  tree(33, 21, true)
+
+  // ---- 芦苇：贴着水线一丛丛枯黄。一根两片交叉的窄三角，哪面看都不消失 ----
+  const reedC = [168, 158, 96], reedD = [148, 144, 88]
+  const reed = function (x, z) {
+    const y0 = gY(x, z) + 0.02
+    for (let i = 0; i < 5; i++) {
+      const f = frac(Math.sin(x * 17.3 + z * 9.1 + i * 2.61) * 127.1)
+      const h = 1.1 + 1.5 * f
+      const sway = (f - 0.5) * 0.8
+      const bx = x + (f - 0.5) * 1.6, bz = z + (frac(f * 7.9) - 0.5) * 1.6
+      const tip = [bx + sway, y0 + h, bz]
+      const c = f > 0.5 ? reedC : reedD
+      mesh.face(greens, vertsOf(greens, [[bx - 0.05, y0, bz], [bx + 0.05, y0, bz], tip]), c)
+      mesh.face(greens, vertsOf(greens, [[bx, y0, bz - 0.05], [bx, y0, bz + 0.05], tip]), c)
+    }
+  }
+  for (let sg = -1; sg <= 1; sg += 2) {
+    for (let i = 0; i < 8; i++) {
+      const z = 36 - i * 12 - 4 * frac(Math.sin(i * 5.7 + sg * 3) * 8.3)
+      reed(sg * (27.6 + 1.2 * frac(Math.sin(z * 0.41 - sg))), z)
+    }
+  }
+
+  // ---- 田块：远景的耕地色斑，一块一个面，铺在里侧树的后面 ----
+  const fieldA = [172, 162, 108], fieldB = [138, 148, 96]
+  for (let sg = -1; sg <= 1; sg += 2) {
+    for (let i = 0; i < 6; i++) {
+      const z0 = -80 + i * 14 + 3 * frac(Math.sin(i * 4.3 + sg) * 6.1)
+      const fx = 36 + 5 * frac(Math.sin(i * 8.9 - sg))
+      const w = 7 + 4 * frac(Math.sin(i * 2.7 + sg * 5))
+      const d = 8 + 3 * frac(Math.sin(i * 1.9 + sg))
+      topQuad(greens, sg * fx, sg * (fx + w), z0, z0 + d, 0.04,
+        i % 2 ? fieldB : fieldA)
+    }
+  }
 
   // ---- 村舍：灰瓦土墙，门朝着河 ----
   const wallC = [206, 196, 176], roofC = [96, 92, 88], doorC = [84, 72, 62]
@@ -798,6 +860,9 @@ function sceneryMeshes() {
     house(sg * 60, 17, 4.3, 3.5)
     house(sg * 72, -18, 4.1, 3.4)
     house(sg * 80, 11, 3.8, 3.2)
+    house(sg * 34, -30, 3.6, 3.0)
+    house(sg * 44, 24, 4.0, 3.2)
+    house(sg * 68, 14, 4.2, 3.4)
   }
 
   return { road: road, greens: greens, houses: houses }
