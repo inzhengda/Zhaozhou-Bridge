@@ -86,7 +86,19 @@ const VIEWS = {
   // 小拱特写。视宽 11 m，一对小拱（11.60~19.41，宽 7.8 m）占掉七成画幅。
   // 再往下压就撞到最近距离 26 m 的下限，两个洞两头都会被切掉
   // pitch 抬到 0.10：压平的视角看洞里只有一条缝，抬高一点才能读出洞的进深
-  small: { yaw: 0.20,  pitch: 0.10,  zoom: 0.15, t: [15.5, 6.0, 0], name: '小拱' }
+  small: { yaw: 0.20,  pitch: 0.10,  zoom: 0.15, t: [15.5, 6.0, 0], name: '小拱' },
+
+// 营造机位：建造模式的默认落点，高空斜俯看 28 道并列拱券。
+//
+// 正面平视时 28 道券前后重叠，画面上只剩最外一道券和侧墙，
+// "并列砌券"这个核心讲点完全看不出来。抬高俯角（pitch 0.75 ≈ 43°，
+// 取"俯视 45°"的观感但留一点立面）：拱弧的立面可见度 =
+// cos(pitch)·cos(yaw) ≈ 0.58，拱的弧线仍在；券沿桥宽方向的错层
+// 投影 9.6·sin(0.65) ≈ 5.8 m，加上高机位的近大远小，道道分得开。
+// yaw 0.65 沿用拆解机位验证过的区间（0.68~0.80 不穿树冠，
+// 略收一点让画面多带桥身）；zoom 0.45 视宽约 33 m，主拱段撑满画幅。
+// 目标压到 ty 3.0，拱背在画面中线上方，券层铺在下半幅。
+build: { yaw: 0.65, pitch: 0.75, zoom: 0.45, t: [0, 3.0, 0], name: '营造' }
 }
 
 const Q_MIN = 150
@@ -427,8 +439,9 @@ Page({
       topCard: top + 88,     // 营造阶段卡 / 泄洪读数卡
       topCmp: top + 180      // 敞肩对比卡（只在泄洪模式出现，压在读数卡之下）
     })
-    // 开画就落在「全景」机位上，和 VIEWS.full 保持一致
-    const v0 = VIEWS.full
+    // 开画就是建造模式，落在「营造」机位上，和 VIEWS.build 保持一致：
+    // 高空斜俯看 28 道并列拱券，层次分明；正面平视时它们前后重叠
+    const v0 = VIEWS.build
     this.cam = {
       yaw: v0.yaw, pitch: v0.pitch, zoom: v0.zoom,
       tx: v0.t[0], ty: v0.t[1], tz: v0.t[2]
@@ -2517,7 +2530,7 @@ Page({
     } else {
       this.st.t = 0
       this.setData({ mode, playing: true, focus: null, focusId: null })
-      this.applyView('full')
+      this.applyView('build')
     }
   },
 
@@ -2661,7 +2674,9 @@ Page({
         to: { yaw: 0.68, pitch: 0.22, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
       }
     } else {
-      this.applyView('full')
+      // 合拢回到营造机位：和建造初始同一视角，券层层次仍在，
+      // 不会又跳回正面把 28 道券叠成一团
+      this.applyView('build')
     }
   }
 })
