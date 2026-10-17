@@ -469,6 +469,7 @@ Page({
       // 场景只搭一次，之后每帧只做投影
       this.bs = B.buildScene()
       this.static = { terrain: this.bs.terrain, scenery: this.bs.scenery }
+      this.cartMesh = this.buildCartMesh()
 
       this.initParticles()
       this._ready = true
@@ -489,6 +490,41 @@ Page({
   },
 
   // ==================== 主循环 ====================
+
+
+  /** 独轮/双轮推车：平台 + 两个轮 + 货箱，建模在 x=0 处，跑起来靠 pushMeshT 平移 */
+  buildCartMesh() {
+    const { slabMesh, mesh, C } = B
+    const y0 = B.deckTop(0)
+    const parts = []
+    // 平台 3.0 x 0.25 x 1.8
+    parts.push(slabMesh(-1.5, 1.5, y0 + 0.55, y0 + 0.80, -0.9, 0.9, C.rail))
+    // 货箱 2.0 x 0.9 x 1.2
+    parts.push(slabMesh(-1.0, 1.0, y0 + 0.80, y0 + 1.70, -0.6, 0.6, C.span))
+    // 两轮：薄棱柱当圆轮用（简化，半径 0.55）
+    for (const sz of [-1.0, 1.0]) {
+      const m = mesh.newMesh()
+      const pts = []
+      const nSeg = 10
+      for (let i = 0; i < nSeg; i++) {
+        const a = (i / nSeg) * Math.PI * 2
+        pts.push([0.55 * Math.sin(a), 0.55 * Math.cos(a)])
+      }
+      mesh.prismZ(m, pts, y0 + 0.0, y0 + 0.14, sz - 0.07, sz + 0.07, C.span)
+      parts.push(m)
+    }
+    // 合并成一个 mesh
+    const cart = mesh.newMesh()
+    for (const m of parts) {
+      const offset = cart.pos.length / 3
+      cart.pos.push(...m.pos)
+      for (const f of m.faces) cart.faces.push({ ...f, i: f.i + offset })
+    }
+    return cart
+  },
+
+  // 马车动载状态
+  cartX: 0, cartDir: 1, cartMesh: null,
 
   tick(ts) {
     if (!this.running || !this._ready) return
@@ -526,6 +562,12 @@ Page({
       if (Math.abs(this.ex - want) < 0.004) this.ex = want
     }
 
+    // 马车动载：受力模式下独轮来回走，力跟着走
+    if (this.data.thrust && !this.data.sec && !this.data.focus) {
+      this.cartX += this.cartDir * dt * 3.2
+      if (this.cartX > 14) { this.cartX = 14; this.cartDir = -1 }
+      if (this.cartX < -14) { this.cartX = -14; this.cartDir = 1 }
+    }
     // 松手惯性：手势里采到的角速度按指数衰减继续带一段，快甩多转、慢拖不飘
     if (this.spin && !this.anim) {
       const c = this.cam
@@ -710,6 +752,12 @@ Page({
     const solid = !this.data.open
     this._ex = this.ex
     this.drawPieces(sc, t, solid, wo)
+
+    // ---- 马车（受力模式下动载来回走）----
+    if (this.cartMesh && this.data.thrust && !this.data.sec && !this.data.focus && !flood) {
+      const dy = B.deckTop(this.cartX) - B.deckTop(0)
+      R.pushMeshT(sc, this.cartMesh, this.cartX, dy, 0, wo)
+    }
 
     // ---- 坦拱对照 ----
     // 拆解状态下 28 道券已经摊开，再叠一道半圆拱虚影就太乱，所以不画
@@ -1494,6 +1542,18 @@ Page({
       }
     }
 
+
+    // 马车动载：荷载箭头跟着车走
+    const cx = this.cartX
+    if (cx !== 0 || this.cartDir !== 1) {
+      const cy = B.deckTop(cx)
+      const a = pr(cx, cy + 4.6, zf), b = pr(cx, cy + 0.7, zf)
+      if (a && b) {
+        this.arrow2(ctx, a, b, 3.2, 'rgba(220,80,40,0.95)')
+        const lx = pr(cx, cy + 5.3, zf)
+        if (lx) { ctx.fillStyle = 'rgba(220,80,40,0.95)'; ctx.fillText('活载', lx[0], lx[1]) }
+      }
+    }
     // 三、拱脚外推。尾巴钉在起拱点上，头收在离画幅边缘 14 px 处。
     // 长度不能写死：全景机位的视宽只有 46 m，起拱点（18.51 m）投影出来
     // 已经在屏幕的九成处，桥台外缘（23.5 m）本就在画外，

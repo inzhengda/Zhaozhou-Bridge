@@ -1028,6 +1028,7 @@ function buildScene() {
 }
 
 module.exports = {
+  slabMesh, mesh,
   C, T, TOTAL, SMALL, RING_N, BRIDGE_W, HW_CROWN, HW_SPRING, BANK_H, BANK_X, BED_Y,
   BANK_KNEE, BANK_KNEE_Y,
   SPAN, HALF_SPAN, RISE, R_IN, R_OUT, CY, HALF_TH, SPRING_Y,
