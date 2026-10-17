@@ -9,10 +9,17 @@ const M = require('./mat4.js')
 
 const NEAR_W = 0.25
 const MAX_CLIP = 8          // 一个面最多被裁出 8 个顶点
-// 没入水下的地形在排序时往后沉这么多米。取值要盖住"相邻两格的格心横坐标
-// 差一整格宽"带来的深度误差（最宽的河格 13.8 m × sin(yaw) ≤ 2.7 m），
-// 又不能让河床翻到真正在它后面的东西前面去——8 m 往上留一倍余量够了。
-const WET_SINK = 10
+// 没入水下的地形在排序时往后沉这么多米。
+//
+// 原取 10 m，只够压住"相邻两格格心横坐标差一整格宽"的深度误差（13.8 m ×
+// sin(yaw) ≤ 2.7 m）。但拆解机位（yaw 0.75、ty 4.0）相机贴着南岸，脚下
+// 湿河床格的真实深度只有四五米，+10 之后仍近于几十米外的水面格——画家
+// 算法让水面先画、河床后画，河面中央就悬出一块 21 m 宽的暗绿滩涂。
+// 河床隔着半透明水面被看见靠的是水面后画叠色，与河床自己的排序值无关；
+// 而水上的东西（桥体、景物）wet 判定为假，从不跟河床比这个偏置。所以
+// 直接把湿面沉到任何机位的任何水面格之外（水面最远 camDist×2.5 ≈ 850 m），
+// 一劳永逸。
+const WET_SINK = 2000
 
 // 颜色字符串缓存：每通道量化到 5 bit，最多 32768 项
 const CSS = new Array(32768)
@@ -201,7 +208,10 @@ function pushFace(sc, pos, faceRec, opt) {
   //
   // 沉的是排序用的那个数，真实深度照旧——雾按真实深度拉，
   // 河床本就在起雾距离以内，不该因为排序被顺手推远。
-  const sortD = (wet && !opt.waterTint) ? depth + WET_SINK : depth
+  // opt.dBias：排序深度手动偏置。半透明叠层（倒影、波光）和它贴着的水面
+  // 面心深度几乎相等，谁先谁后全看浮点抖动；往相机方向偏 2-3 m 就稳定地
+  // 排到水面之后，压在水色上面
+  const sortD = (wet && !opt.waterTint) ? depth + WET_SINK : depth + (opt.dBias || 0)
 
   // 4) 上色（opt.color 可整件覆盖基色，用于建造高亮）
   const base = opt.color || faceRec.c
@@ -248,8 +258,11 @@ function pushFace(sc, pos, faceRec, opt) {
       // 湿面略压暗
       r *= 0.88; g *= 0.92; b *= 0.96
     } else {
-      // 地形：只是泡在水里，压暗即可（上色带留给桥体）
-      const f = 1 - 0.34 * Math.min(1, sub / (opt.waterDepth || 1))
+      // 地形：只是泡在水里，压暗即可（上色带留给桥体）。
+      // 压暗量必须是**常数**：原来按每格的没入深度算，河床深浅不一，
+      // 半透明的水面之下就显出一格深一格浅的方格纹，整条河看着像铺了瓷砖。
+      // 水深的空间感交给水面自己的透明度坡度去表达
+      const f = 0.72
       r *= f; g *= f * 1.01; b *= f * 1.05
     }
   }
@@ -270,7 +283,11 @@ function pushFace(sc, pos, faceRec, opt) {
     p: p,
     d: sortD,
     s: cssOf(r, g, b),
-    a: opt.alpha || 1
+    a: opt.alpha || 1,
+    // opt.seam：描边压接缝。只用于不透明面（地形等）描本色，
+    // 盖住共享边的 AA 缝隙；半透明面（水面）描边自身也是格线来源，
+    // 由调用方保证不描边（消融对账：描边去净后目检干净）
+    ln: opt.seam ? (opt.seamLn || 1) : 0
   }
   sc.list.push(rec)
   sc.stats.drawn++
@@ -408,6 +425,12 @@ function drawList(ctx, list) {
     for (let k = 2; k < p.length; k += 2) ctx.lineTo(p[k], p[k + 1])
     ctx.closePath()
     ctx.fill()
+    if (rec.ln) {
+      ctx.lineWidth = rec.ln
+      ctx.lineJoin = 'round'
+      ctx.strokeStyle = rec.s
+      ctx.stroke()
+    }
     if (rec.a !== 1) ctx.globalAlpha = 1
   }
 }

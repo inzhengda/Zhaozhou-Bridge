@@ -87,6 +87,8 @@ function makePage({ w, h, data, view, cam, detail }) {
 
   // ---- onLoad 那几行 ----
   page.st = { t: 0, q: Q_DEF }
+  page.animT = 0        // 波面相位钟。漏了它 wave() 里 undefined*speed=NaN，
+                        // 整个水面（和倒影）会被近平面裁剪静默丢弃
   const v = VIEWS[view || 'full']
   page.cam = { yaw: v.yaw, pitch: v.pitch, zoom: v.zoom, tx: v.t[0], ty: v.t[1], tz: v.t[2] }
   if (cam) Object.assign(page.cam, cam)
@@ -120,6 +122,14 @@ const SHOTS = [
   // 斜 45° 俯视：面深度排序问题最容易在这种角度暴露（桥面断片、洞被填死）
   { name: 'diag', note: '斜视角 · 桥面完整性检查', detail: true, data: { mode: 'build', anno: false }, t: BUILT,
     cam: { yaw: 0.62, pitch: 0.16, zoom: 0.30, tx: 0, ty: 3.6, tz: 0 } },
+  // 树冠特写：怼到近岸大树跟前，验八面体冠有没有画、绕序有没有被剔。
+  // d 显式给定（近景机位不走全景 camDist），从河面上望西岸树(-34,10)
+  // 的冠心——这条视线越过河床，近景里不会有村舍房顶乱入
+  { name: 'tree', note: '树冠特写', detail: true, data: { mode: 'build', anno: false }, t: BUILT,
+    cam: { yaw: 1.566, pitch: 0.10, zoom: 0.85, d: 30, tx: -34, ty: 12, tz: 10 } },
+  // 斜视角桥面特写：diag 里桥面西半段出现过一块浅色区域，放大定位
+  { name: 'diag-deck', note: '斜视角桥面特写', detail: true, data: { mode: 'build', anno: false }, t: BUILT,
+    cam: { yaw: 0.62, pitch: 0.10, zoom: 0.55, tx: -6, ty: 7.5, tz: 0 } },
   { name: 'build-mid', note: '营造中 · 砌到第 14 道券', view: 'side', detail: true, data: { mode: 'build', anno: true }, t: 9.0 },
   { name: 'build-flat', note: '坦拱对照', view: 'full', detail: true, data: { mode: 'build', flat: true, anno: true }, t: BUILT },
   // 拆解那一张必须转到侧向才看得见——券是沿桥宽摊开的，正面看几乎重合。
@@ -127,7 +137,7 @@ const SHOTS = [
   {
     name: 'split', note: '拆解 28 券', detail: true,
     data: { mode: 'build', split: true, anno: false }, t: BUILT, split: 1,
-    cam: { yaw: 1.00, pitch: 0.12, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
+    cam: { yaw: 0.68, pitch: 0.22, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
   },
   { name: 'flood-900', note: '泄洪 q=900 · 外侧两孔过水', view: 'full', detail: true, data: { mode: 'flood', q: 900 }, t: BUILT },
   { name: 'flood-1300', note: '泄洪 q=1300 · 四孔全开', view: 'full', detail: true, data: { mode: 'flood', q: 1300 }, t: BUILT },
@@ -172,6 +182,9 @@ function main() {
   const args = process.argv.slice(2)
   const only = (args.find((a) => a.startsWith('--only=')) || '').slice(7)
   const scale = parseFloat((args.find((a) => a.startsWith('--scale=')) || '').slice(8)) || 1
+  // --yaw=V / --pitch=V：覆盖镜头朝向，扫一圈找深度排序的毛病
+  const yawOv = args.find((a) => a.startsWith('--yaw='))
+  const pitchOv = args.find((a) => a.startsWith('--pitch='))
   const noOutline = args.includes('--no-outline')
   const noPrefix = args.includes('--plain') ? '' : (noOutline ? 'noout-' : '')
   if (R.setOutline) R.setOutline(!noOutline)
@@ -198,13 +211,31 @@ function main() {
     const page = makePage({
       w: W, h: H, view: shot.view, cam: shot.cam, detail: shot.detail, data: shot.data
     })
+    if (yawOv) page.cam.yaw = parseFloat(yawOv.split('=')[1])
+    if (pitchOv) page.cam.pitch = parseFloat(pitchOv.split('=')[1])
     page.st.t = shot.t === undefined ? BUILT : shot.t
     if (shot.split !== undefined) { page.ex = shot.split; page._ex = shot.split }
 
     page.draw(0.016)
+  // --isolate=scenery：只重画景物网格，排查深度排序/剔除问题用
+  if (args.includes('--isolate=scenery')) {
+    page.scene.list.length = 0
+    const sc = page.scene
+    R.beginFrame(sc)
+    const cam = page.cam
+    // 手动搭一遍 pushMesh（照抄 draw() 里景物那三行）
+    const waterY = -0.35
+    const opt = { waterY: waterY, waterDepth: 1.0 }
+    R.pushMesh(sc, page.static.scenery.road, null, opt)
+    R.pushMesh(sc, page.static.scenery.greens, null, opt)
+    R.pushMesh(sc, page.static.scenery.houses, null, opt)
+    R.flush(page.ctx.ctx, sc)
+  }
 
-    const svgPath = path.join(OUT, `${noPrefix}${shot.name}.svg`)
-    const pngPath = path.join(OUT, `${noPrefix}${shot.name}.png`)
+    const tag = (yawOv ? 'y' + parseFloat(yawOv.split('=')[1]).toFixed(2) : '') +
+                (pitchOv ? 'p' + parseFloat(pitchOv.split('=')[1]).toFixed(2) : '')
+    const svgPath = path.join(OUT, `${noPrefix}${shot.name}${tag}.svg`)
+    const pngPath = path.join(OUT, `${noPrefix}${shot.name}${tag}.png`)
     const svg = page.ctx.toSVG()
     fs.writeFileSync(svgPath, svg)
     toPng(svgPath, pngPath, W, H, scale)

@@ -589,7 +589,9 @@ Page({
 
   camera() {
     const c = this.cam
-    const d = this.camDist(c.zoom)
+    // d 允许镜头表显式给定：近景机位（树冠这类）不受全景视锥的
+    // camDist 约束，否则"特写"实际在 190 m 外拍，什么都看不清
+    const d = this.cam.d != null ? this.cam.d : this.camDist(c.zoom)
     const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch)
     const target = [c.tx, c.ty, c.tz]
     const eye = [
@@ -598,6 +600,28 @@ Page({
       target[2] + d * cp * Math.cos(c.yaw)
     ]
     if (eye[1] < 1.2) eye[1] = 1.2
+    // 视线不许钻进地形：长焦侧后机位就算眼睛在岸顶上方，视线朝
+    // 目标下俯，还是会在两岸陡坡段扎进地里——画面被一条地平带
+    // 拦腰截断，桥"消失"。沿视线采样比高，视线高度对 eye[1] 是
+    // 线性的，亏空除以各自的 u 取最大，一次解出精确抬升量
+    let lift = 0
+    // 目标本身贴地/入土时（如对岸坡近景），视线近段必然贴坡，按全段
+    // 采样会解出天文数字的抬升把构图炸掉——这类目标近段直接跳过。
+    // 解不封顶：极端手势（贴水仰视远望）穿堤亏空本来就要几十米，
+    // 抬到位才能保住"视线永不穿地"这条硬约束，宁可视野抬高也不让
+    // 一条土坎拦腰截断桥
+    const grounded = target[1] < B.groundY(Math.abs(target[0])) + 2
+    for (let s = 1; s <= 48; s++) {
+      const u = s / 48
+      if (grounded && u < 0.3) continue
+      const x = target[0] + (eye[0] - target[0]) * u
+      const y = target[1] + (eye[1] - target[1]) * u
+      // 余量 2.5 m：贴着坡顶切过去桥会藏进岸坡的视线阴影里，
+      // 高一点变成"越顶斜视"，河谷里的桥面和拱上部都露出来
+      const need = (B.groundY(Math.abs(x)) + 2.5 - y) / u
+      if (need > lift) lift = need
+    }
+    if (lift > 0) eye[1] += lift
     return { eye, target, w: this.cw, h: this.ch, fov: 38 }
   },
 
@@ -643,7 +667,15 @@ Page({
 
     // ---- 静态地形 ----
     R.pushMesh(sc, this.static.terrain, null, {
-      waterY: waterY, waterDepth: waterDepth
+      waterY: waterY, waterDepth: waterDepth,
+      // 地形是开放的高度场：两岸的陡坡格几乎立起来，法线朝水平方向，
+      // 从岸顶那侧看是"背面"，会被剔除——桥台周围就漏出天空，桥台
+      // 像悬在雾里。地形不做背面剔除，多画的只是几十个背格
+      noCull: true,
+      // seam：顺序 AA 的边缘合成只有 75% 覆盖，大平面上就是满屏格线。
+      // 地形和水面这两片"大平面"必须同色描边压缝；桥体面小、色彩碎，
+      // 缝陷在纹理里看不见，就不花这笔描边开销了
+      seam: true
     })
     // 岸上景物：官道、纤道、树、村舍，跟着地形一起受水位浸染
     const scN = this.static.scenery
@@ -671,6 +703,7 @@ Page({
     const peak = flood && waterY > 6.2
     const amp = flood ? 0.9 + bd * 0.45 + (peak ? 0.35 : 0) : 1
     this.drawWater(sc, waterY, this.animT, flood, wetHalf(waterY), cam.eye[2], d, amp)
+    this.drawReflections(sc, waterY, flood)
 
     // ---- 水流粒子 & 水花 ----
     this.drawParticles(sc, dt, waterY, flood, flow, ev)
@@ -1074,9 +1107,12 @@ Page({
         // 值必然相同，水面严丝合缝地拼在一起（详见 backwater 的注释）
         const ya = level + backwater(z0, flood)
         const yb = level + backwater(z1, flood)
-        // 近岸水浅，透一点让河床露出来；深水处更实
+        // 近岸水浅，透一点让河床露出来；深水处更实。
         const depth = Math.max(0, level - B.groundY(Math.abs(cx)))
-        const alpha = 0.46 + 0.26 * Math.min(1, depth / 6)
+        const alpha = 0.44 + 0.20 * Math.min(1, depth / 9)
+        // 坡度放缓（/9）、对比收窄（±0.10）：相邻格的 alpha 台阶压到
+        // 0.02 上下，格子拼缝就退到可视阈以下；深水饱和值也从 0.72
+        // 降到 0.64，深浅水域的交界不再是一刀切的硬边
         // 这里刻意不按格心给亮度：水面每格是一个平涂的四边形，
         // 格心亮度一旦随位置变，远格与近格之间就会裂出横向的硬条带。
         // 水面质感交给四个角的 wave() 起伏和随深度的透明度。
@@ -1094,6 +1130,61 @@ Page({
     return A * (0.09 * Math.sin(x * 0.34 + u * 1.7) +
                 0.06 * Math.sin(z * 0.21 - u * 2.2) +
                 0.04 * Math.sin((x + z) * 0.55 + u * 3.1))
+  },
+
+  /**
+   * 主拱倒影 + 顺流微光。近 140 m 的河面占了全景画幅的大半，一块匀色
+   * 半透明平面会把空间感全部抹掉；倒影（拱与倒影合成满月，这座桥最
+   * 出名的水景）和两条随浪起伏的亮带给水面装上「内容」。
+   * 倒影往相机方向拉伸：低角度看水面，像落在桥脚前方的水面上，
+   * 拱顶处拉得最长——0.9 倍拱高，正好和拱洞拼成一轮「满月」。
+   */
+  drawReflections(sc, waterY, flood) {
+    if (waterY < -1.2) return
+    const sp = flood ? 1 : 0.35
+    const N = 14
+    // 主拱倒影：近缘贴水面线，远缘按内弧高度向镜头方向拉伸，分 5 段
+    // 画。整条带一个 alpha 会把倒影印成一整块边界生硬的深色矩形；
+    // 真实倒影是离桥越近越浓、往镜头方向融进水色的，所以按远缘分段
+    // 衰减，段与段只差 0.04，拼起来是一道渐变的影
+    const zAt = (i, u) => {
+      const x = -B.HALF_SPAN + (2 * B.HALF_SPAN * i) / N
+      const arch = B.archIntrados(x)
+      // 近缘从 z 5.3 起步：贴着桥脚画会被桥身自己挡住（低角度掠射），
+      // 前移到桥前开阔水面，"拱+倒影"的画面才立得起来
+      return [x, 5.3 + 0.9 * Math.max(0.3, arch - waterY) * u]
+    }
+    const K = 5
+    for (let s = 0; s < K; s++) {
+      const u0 = s / K, u1 = (s + 1) / K
+      const band = []
+      for (let i = 0; i <= N; i++) {
+        const p = zAt(i, u0)
+        band.push([p[0], waterY - 0.02 + this.wave(p[0], p[1], this.animT, sp) * 0.55, p[1]])
+      }
+      for (let i = N; i >= 0; i--) {
+        const p = zAt(i, u1)
+        band.push([p[0], waterY - 0.02 + this.wave(p[0], p[1], this.animT, sp) * 0.55, p[1]])
+      }
+      R.pushPoly(sc, band, [34, 52, 56],
+        { alpha: 0.24 * (1 - 0.78 * (u0 + u1) / 2), noCull: true, dBias: -3 })
+    }
+
+    // 顺流的两条微光：水面的方向感全靠它，没有它水面就是一块塑料板
+    for (let sg = -1; sg <= 1; sg += 2) {
+      const gx = sg * 5.5
+      const band = []
+      for (let i = 0; i <= 8; i++) {
+        const z = -70 + 140 * i / 8
+        band.push([gx - 0.8, waterY + 0.02 + this.wave(gx, z, this.animT, sp) * 0.8, z])
+      }
+      for (let i = 8; i >= 0; i--) {
+        const z = -70 + 140 * i / 8
+        band.push([gx + 0.8 + sg * 0.5,
+          waterY + 0.05 + this.wave(gx + 1.6, z, this.animT, sp) * 0.8, z])
+      }
+      R.pushPoly(sc, band, [210, 222, 214], { alpha: 0.17, noCull: true, dBias: -2 })
+    }
   },
 
   // ==================== 粒子 / 水花 ====================
@@ -2277,7 +2368,7 @@ Page({
         t: 0,
         from: { yaw: c.yaw, pitch: c.pitch, zoom: c.zoom, tx: c.tx, ty: c.ty, tz: c.tz },
         // 与 onToggleSplit 同一机位：28 道券沿桥宽摊开，得转到侧向看
-        to: { yaw: 1.00, pitch: 0.12, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
+        to: { yaw: 0.75, pitch: 0.12, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
       }
       d.view = 'free'
     } else if (s.view) {
@@ -2428,10 +2519,16 @@ Page({
         t: 0,
         from: { yaw: this.cam.yaw, pitch: this.cam.pitch, zoom: this.cam.zoom,
                 tx: this.cam.tx, ty: this.cam.ty, tz: this.cam.tz },
-        //   机位要转到接近侧向（yaw ≈ 1.0，也就是 57°）：28 道券是沿桥宽
-        //   方向摊开的，正面看它们几乎重合，摊开也只是一片密排的横线。
-        //   转过来才看得出是一道道**各自独立**的拱券
-        to: { yaw: 1.00, pitch: 0.12, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
+        //   机位要转到接近侧向（yaw 0.68，39°）：28 道券是沿桥宽方向
+        //   摊开的，正面看它们几乎重合，摊开也只是一片密排的横线。
+        //   转过来才看得出是一道道**各自独立**的拱券。yaw 不给到 1.0：
+        //   ±1.0 的视线正好从东岸大树（±36,21）/（±40,-23）的冠心里穿过
+        //   去；0.75-0.80 时近岸坡树群（x≈±32，z 6~45）的八面体冠以 32 m
+        //   的真实深度压在 70 m 外的水面上，冠沿在深蓝水面上像一块悬空
+        //   的绿贴图。0.68 把冠沿整个挪进右下的岸地里，树冠落在地平线
+        //   上，物理和视觉就都顺了。pitch 抬到 0.22：脚下贴脸的湿滩涂
+        //   退出主画幅，扇形展开仍保留八成半宽
+        to: { yaw: 0.68, pitch: 0.22, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
       }
     } else {
       this.applyView('full')

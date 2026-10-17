@@ -611,12 +611,23 @@ function bankRelief(x, z) {
  * 没入水的干河床，一蓝一褐交替。两张表合成一张，同一格水域的两个面
  * 深度几乎相等，pushFace 里"水后压、地形先画"的先后就自然对上了。
  *
- * 加密的地方是桥下（拱券进出水面那一小段）和相机可能落脚的一圈
- * （观察距离 26 ~ 340 m，也就是 z 约 ±340 以内）。
+ * 加密的地方是桥下（拱券进出水面那一小段）、相机可能落脚的一圈
+ * （观察距离 26 ~ 340 m，也就是 z 约 ±340 以内），以及**雾化带**：
+ * 雾按面平涂，相邻行的雾化差 = 对比度×行距/雾程，行距 16-20 m 的
+ * 远区在雾化带中段一行跳 15-23 级，水面就显出横向条带——所以
+ * |z| ≤ 374（雾 far 2.1×340 的最远可达范围）压到 6-8 m 一行，
+ * 行间差退到 3-7 级，隐入波浪起伏；|z| > 374 雾已钳制在 0.94，
+ * 行距再大也不变色，保持粗格省面数。两端对称：相机可以转一圈。
  */
-const TERRAIN_ZS = [-TERRAIN_Z, -300, -180, -110, -70, -44, -26, -15, -8,
+const TERRAIN_ZS = [-TERRAIN_Z, -460, -424, -396, -372, -360, -348, -336, -324, -312, -300,
+                    -288, -276, -264, -252, -240, -228, -216, -204, -192, -180,
+                    -172, -166, -160, -154, -148, -142, -136, -130, -124, -118, -112, -106,
+                    -100, -94, -88, -82, -76, -70, -64, -58, -52, -46, -40, -34, -29, -24, -20, -16, -13, -10, -8,
                     -4.6, -2.4, -1.2, -0.5, 0.5, 1.2, 2.4, 4.6,
-                    8, 15, 26, 44, 70, 110, 180, 300, TERRAIN_Z]
+                    8, 15, 21, 27, 33, 39, 45, 51, 57, 63, 70,
+                    76, 82, 88, 94, 100, 106, 112, 118, 124, 130, 136, 142,
+                    150, 158, 166, 174, 180, 192, 204, 216, 228, 240, 252, 264, 276, 288, 300,
+                    312, 324, 336, 348, 360, 372, 396, 424, 460, TERRAIN_Z]
 
 /**
  * 地形沿 x（桥长方向）的分段。水面也用这张表，理由同上。
@@ -646,6 +657,10 @@ function soilTone(base, x, z) {
 function terrainMesh() {
   const m = mesh.newMesh()
   const xs = TERRAIN_XS
+  // 每格地形面的基色与光照系数，按面的推送顺序（z 行 × x 列）记录。
+  // 水面的 seam 描边要做"水色叠床色"的预合成，床色必须是地形 rec
+  // 的真实链路（soilTone × k），差一个系数描边就比填充亮一个量化桶
+  m.cells = []
   for (let j = 0; j < TERRAIN_ZS.length - 1; j++) {
     const z0 = TERRAIN_ZS[j], z1 = TERRAIN_ZS[j + 1]
     for (let k = 0; k < xs.length - 1; k++) {
@@ -660,6 +675,7 @@ function terrainMesh() {
         [xa, ya + bankRelief(xa, z1), z1],
         [xb, yb + bankRelief(xb, z1), z1],
         [xb, yb + bankRelief(xb, z0), z0], col, 1)
+      m.cells.push({ c: col, k: m.faces[m.faces.length - 1].k })
     }
   }
   return m
@@ -731,15 +747,19 @@ function sceneryMeshes() {
     // 河岸杨树本来就是十米上下的个子，比桥还高——桥边一排小灌木似的
     // 树冠撑不起"河岸"这个词，全景里也根本看不见
     const h = (2.6 + 1.4 * f1) * (big ? 1.6 : 1)
-    const r = (2.0 + 1.0 * f2) * (big ? 1.5 : 1)
+    // 冠径压回真实杨树的比例（2-3 m，大树 2.7-3.8）。上一版冠径 3-4.5 m，
+    // 配 0.26 m 的细杆，斜视角下邻树的冠和杆在画面上一错位就成了浮空气球
+    const r = (1.5 + 0.8 * f2) * (big ? 1.35 : 1)
     const tw = big ? 0.13 : 0.09
     mesh.box(greens, x - tw, x + tw, base, base + h, z - tw, z + tw, trunkC)
     const leaf = f1 > 0.5 ? leafA : leafB
-    blob(x, base + h + r * 0.62, z, r, r, leaf)
+    blob(x, base + h + r * 0.5, z, r, r, leaf)
   }
   // 八面体团块：树冠与灌木共用。ry 压扁了就是灌木，不用第二套几何
   const blob = function (cx, cy, cz, rx, ry, leaf) {
-    const T = [cx, cy + ry], Bm = [cx, cy - ry]
+    // T/Bm 必须带 z：vertsOf 会把 undefined 直接压进顶点，投影成 NaN 后
+    // canvas fill 整条 path 静默失效——树冠只剩杆子就是从这里来的
+    const T = [cx, cy + ry, cz], Bm = [cx, cy - ry, cz]
     const px = [cx + rx, cy, cz], nx = [cx - rx, cy, cz]
     const pz = [cx, cy, cz + rx], nz = [cx, cy, cz - rx]
     mesh.face(greens, vertsOf(greens, [px, T, pz]), leaf)
@@ -751,13 +771,16 @@ function sceneryMeshes() {
     mesh.face(greens, vertsOf(greens, [nx, nz, Bm]), leaf)
     mesh.face(greens, vertsOf(greens, [nz, px, Bm]), leaf)
   }
-  // 近岸坡（z 5~45）补密：转视角时这段坡是中前景，秃了最扎眼
+  // 近岸坡（z 5~45）补两棵树一丛灌木：转视角时这段坡是中前景，秃了最扎眼。
+  // 数量整体压着给——树一多就把桥挡了，教学视图里桥是绝对主角
   for (let sg = -1; sg <= 1; sg += 2) {
     for (let i = 0; i < 4; i++) {
-      const z = 6 + i * 8 + 2 * frac(Math.sin(i * 9.7 + sg * 4) * 5.3)
-      tree(sg * (31.5 + 3.5 * frac(Math.sin(z * 0.53 - sg))), z, i % 2 === 0)
+      if (i % 2) continue
+      const z = 6 + i * 6 + 2 * frac(Math.sin(i * 9.7 + sg * 4) * 5.3)
+      tree(sg * (31.5 + 3.5 * frac(Math.sin(z * 0.53 - sg))), z, i === 0)
     }
     for (let i = 0; i < 3; i++) {
+      if (i === 1) continue
       const f = frac(Math.sin(i * 13.7 + sg * 7) * 43.7)
       const z = 10 + i * 11 + 3 * f
       const bx = sg * (30 + 4 * frac(Math.sin(z * 0.61 + sg)))
@@ -766,26 +789,27 @@ function sceneryMeshes() {
         f > 0.5 ? [128, 142, 84] : [112, 134, 76])
     }
   }
-  // 河边一排（贴着常水位以上的岸坡），里侧一排错开，下游远处再补一条林带——
-  // 全景里对岸只有两排树还是显得秃，三层叠出纵深才像有人住的河岸
+  // 河边一排（贴着常水位以上的岸坡），里侧一排错开，下游远处一条稀林带
   for (let sg = -1; sg <= 1; sg += 2) {
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 6; i++) {
       const z = 8 - i * 11 - 3 * frac(Math.sin(i * 7.3 + sg) * 9.91)
       tree(sg * (30.2 + 2.6 * frac(Math.sin(z * 0.37 + sg * 2))), z, false)
     }
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 4; i++) {
       const z = 3 - i * 12 - 4 * frac(Math.sin(i * 4.9 - sg) * 6.77)
       tree(sg * (38 + 4 * frac(Math.sin(z * 0.29 - sg))), z, false)
     }
     for (let i = 0; i < 6; i++) {
+      if (i % 2) continue
       const z = -40 - i * 12 - 5 * frac(Math.sin(i * 3.1 + sg) * 7.7)
       tree(sg * (34 + 6 * frac(Math.sin(z * 0.31 - sg))), z, false)
     }
   }
-  tree(-28.5, 6.5, true)
-  tree(28.5, -6.5, true)
-  tree(-31, 26, true)
-  tree(33, 21, true)
+  // 桥堍大树当框景，摆在引桥端外侧：冠底约 5.7 m，从引桥上方掠过不压桥面
+  tree(-34, 10, true)
+  tree(34, -10, true)
+  tree(-36, 26, true)
+  tree(36, 21, true)
 
   // ---- 芦苇：贴着水线一丛丛枯黄。一根两片交叉的窄三角，哪面看都不消失 ----
   const reedC = [168, 158, 96], reedD = [148, 144, 88]
@@ -825,7 +849,9 @@ function sceneryMeshes() {
   // ---- 村舍：灰瓦土墙，门朝着河 ----
   const wallC = [206, 196, 176], roofC = [96, 92, 88], doorC = [84, 72, 62]
   const house = function (x, z, w, d) {
-    const y0 = gY(x, z) - 0.35
+    // 埋深 0.9 m：gY 只取房心一点的地高，四角地形起伏能把浅埋的房子
+    // 顶得悬空离地；埋深盖过起伏幅度，四角怎么歪都坐实在坡里
+    const y0 = gY(x, z) - 0.9
     const y1 = y0 + 2.2 + 0.3 * frac(Math.sin(x * 5.1 + z))
     const ridge = y1 + 0.85
     const ov = 0.28
@@ -1008,7 +1034,7 @@ module.exports = {
   DECK_HALF, DECK_CROWN, DECK_END, DECK_TH, DECK_R, DECK_CY,
   ABUT_X0, ABUT_X1, ABUT_LEN, ABUT_HW, ABUT_TOP, ABUT_BOT, FOUND_N, FOUND_T,
   FOUND_BOT, ABUT_EDGE, RAIL_PANEL,
-  groundY, archIntrados, archExtrados, halfWidth, haunchTop, wallBottom,
+  groundY, archIntrados, archExtrados, halfWidth, haunchTop, wallBottom, soilTone,
   deckTop, deckBottom, smallIntrados, smallExtrados, smallAt,
   TERRAIN_ZS, TERRAIN_XS, terrainMesh,
   ringMesh, keystoneMesh, smallRingMesh, haunchMesh, railPiece, deckSegments,
