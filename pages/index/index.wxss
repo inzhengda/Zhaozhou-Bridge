@@ -653,3 +653,21 @@ page {
 .chip { min-height: 64rpx; display: flex; align-items: center; justify-content: center; }
 .band { min-height: 56rpx; display: flex; align-items: center; justify-content: center; }
 .tour-btn { min-height: 80rpx; display: flex; align-items: center; justify-content: center; }
+
+/* 考考你 */
+.quiz-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,.45); z-index: 98; }
+.quiz { position: fixed; left: 16rpx; right: 16rpx; z-index: 99; background: #141414; border: 1px solid #2a2a2a; border-radius: 12rpx; padding: 24rpx; max-height: 70vh; overflow-y: auto; }
+.quiz-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.quiz-title { font-size: 30rpx; font-weight: 600; color: #e8e8e8; }
+.quiz-close { font-size: 26rpx; color: #999; }
+.quiz-progress { font-size: 22rpx; color: #777; margin-bottom: 8rpx; }
+.quiz-q { font-size: 28rpx; color: #ddd; line-height: 1.5; margin-bottom: 16rpx; }
+.quiz-opts { display: flex; flex-direction: column; gap: 10rpx; }
+.quiz-opt { padding: 16rpx 20rpx; border: 1px solid #333; border-radius: 8rpx; font-size: 26rpx; color: #bbb; }
+.quiz-opt.right { border-color: #4a4; color: #6c6; background: rgba(68,170,68,.08); }
+.quiz-opt.wrong { border-color: #a44; color: #c66; background: rgba(170,68,68,.08); }
+.quiz-why { margin-top: 14rpx; padding: 14rpx; background: rgba(255,255,255,.04); border-radius: 6rpx; font-size: 24rpx; color: #99a; line-height: 1.6; }
+.quiz-next { margin-top: 16rpx; text-align: center; padding: 16rpx; border: 1px solid #556; border-radius: 8rpx; font-size: 28rpx; color: #ccd; }
+.quiz-done { font-size: 26rpx; color: #aab; line-height: 1.7; margin-bottom: 16rpx; }
+.quiz-restart { text-align: center; padding: 14rpx; border: 1px solid #456; border-radius: 8rpx; font-size: 26rpx; color: #bcd; }
+

@@ -14,6 +14,7 @@ const M = require('../../utils/mat4.js')
 const R = require('../../utils/renderer.js')
 const H = require('../../utils/hydro.js')
 const SRC = require('../../utils/sources.js')
+const QUIZ = require('./quiz-data.js')
 
 const PHASES = [
   {
@@ -384,6 +385,8 @@ Page({
     srcTabs: SRC.TABS,
     srcTab: SRC.TABS[0],
     srcOpen: false,
+    quizOpen: false, quizIdx: 0, quizPick: null, quizDone: false,
+    QUIZ: QUIZ,
     // 顶部安全区，onLoad 里按状态栏 + 胶囊按钮量出来（px）。见 measureTop
     topTitle: 64, topBtn: 120, topCard: 152, topCmp: 250
   },
@@ -2347,7 +2350,7 @@ Page({
    * build 模式下还没砌出来的部位不参与拾取（minT 是它落位的时刻）。
    */
   pickPart(px, py) {
-    if (this.data.sec || this.data.srcOpen || this.data.tour !== null) return
+    if (this.data.sec || this.data.quizOpen || this.data.srcOpen || this.data.tour !== null) return
     const sc = this.scene
     if (!sc || !sc.vp) return
     let best = null, bd = 1e9
@@ -2538,6 +2541,24 @@ Page({
    * 没意义；但也不能直接把 playing 置 false 就算完——关面板时再去读
    * this.data.playing 读到的已经是刚置下的那个 false，动画就再也起不来了。
    */
+  onQuizOpen() {
+    this.setData({ quizOpen: true, quizIdx: 0, quizPick: null, quizDone: false, sec: false, srcOpen: false, tour: null })
+  },
+  onQuizClose() { this.setData({ quizOpen: false }) },
+  onQuizPick(e) {
+    if (this.data.quizPick !== null) return
+    const i = +e.currentTarget.dataset.i
+    this.setData({ quizPick: i })
+  },
+  onQuizNext() {
+    if (this.data.quizIdx + 1 < QUIZ.length) {
+      this.setData({ quizIdx: this.data.quizIdx + 1, quizPick: null })
+    } else {
+      this.setData({ quizDone: true })
+    }
+  },
+  onQuizRestart() { this.setData({ quizIdx: 0, quizPick: null, quizDone: false }) },
+
   onToggleSrc() {
     if (!this.data.srcOpen) {
       this._wasPlaying = this.data.playing
