@@ -84,7 +84,8 @@ const VIEWS = {
   under: { yaw: 0.10,  pitch: -0.030, zoom: 0.27, t: [0, 4.6, 0], name: '拱下' },
   // 小拱特写。视宽 11 m，一对小拱（11.60~19.41，宽 7.8 m）占掉七成画幅。
   // 再往下压就撞到最近距离 26 m 的下限，两个洞两头都会被切掉
-  small: { yaw: 0.20,  pitch: 0.03,  zoom: 0.15, t: [15.5, 5.6, 0], name: '小拱' }
+  // pitch 抬到 0.10：压平的视角看洞里只有一条缝，抬高一点才能读出洞的进深
+  small: { yaw: 0.20,  pitch: 0.10,  zoom: 0.15, t: [15.5, 6.0, 0], name: '小拱' }
 }
 
 const Q_MIN = 150
@@ -194,7 +195,7 @@ const PARTS = (function () {
       l2: '券脚低，洪水先从这里泄出（' + Q_OUTER + ' m³/s 起）',
       minT: B.T.small[1],
       hit: [sg * so.xc, yOut, 0],
-      cam: { yaw: 0.20, pitch: 0.03, zoom: 0.15, tx: sg * so.xc, ty: 5.6, tz: 0 }
+      cam: { yaw: 0.20, pitch: 0.10, zoom: 0.15, tx: sg * so.xc, ty: 6.0, tz: 0 }
     })
     list.push({
       id: 'si' + sg, name: '敞肩小拱 · 内侧',
@@ -202,7 +203,7 @@ const PARTS = (function () {
       l2: '水涨到 ' + Q_INNER + ' m³/s 才够着券脚，洪峰时四孔齐泄',
       minT: B.T.small[1],
       hit: [sg * si.xc, yIn, 0],
-      cam: { yaw: 0.20, pitch: 0.03, zoom: 0.17, tx: sg * si.xc, ty: 6.2, tz: 0 }
+      cam: { yaw: 0.20, pitch: 0.10, zoom: 0.17, tx: sg * si.xc, ty: 6.2, tz: 0 }
     })
     list.push({
       id: 'ab' + sg, name: '桥台与地基',
@@ -464,7 +465,7 @@ Page({
 
       // 场景只搭一次，之后每帧只做投影
       this.bs = B.buildScene()
-      this.static = { terrain: this.bs.terrain }
+      this.static = { terrain: this.bs.terrain, scenery: this.bs.scenery }
 
       this.initParticles()
       this._ready = true
@@ -535,7 +536,7 @@ Page({
     if (!B.setDetail(want)) return
     this.detailOn = want
     this.bs = B.buildScene()
-    this.static = { terrain: this.bs.terrain }
+    this.static = { terrain: this.bs.terrain, scenery: this.bs.scenery }
     this.rc = []            // 拱券缓存的网格是按旧分段建的，全部作废
     this.rcN = 0
   },
@@ -644,6 +645,11 @@ Page({
     R.pushMesh(sc, this.static.terrain, null, {
       waterY: waterY, waterDepth: waterDepth
     })
+    // 岸上景物：官道、纤道、树、村舍，跟着地形一起受水位浸染
+    const scN = this.static.scenery
+    R.pushMesh(sc, scN.road, null, { waterY: waterY, waterDepth: waterDepth })
+    R.pushMesh(sc, scN.greens, null, { waterY: waterY, waterDepth: waterDepth })
+    R.pushMesh(sc, scN.houses, null, { waterY: waterY, waterDepth: waterDepth })
     // 压强热力色只在泄洪时上身。营造时河浅、桥台埋在砂里，
     // 埋深处的 p = ρgh 会把桥台染成通红，看着像出了错
     const wo = { waterY: waterY, waterDepth: waterDepth, waterTint: flood }
@@ -2298,7 +2304,8 @@ Page({
     if (mode === this.data.mode) return
     if (mode === 'flood') {
       this.st.t = B.TOTAL
-      this.setData({ mode, playing: false, focus: null, focusId: null })
+      // 泄洪只有敞肩态：营造页若开过实肩对照，切回来要重置，否则小拱被实肩填死
+      this.setData({ mode, playing: false, open: true, focus: null, focusId: null })
       // 泄洪的机位只剩全景和小拱两档了，进屋就落在全景；
       // 上一轮已经停在某一档（比如「小拱」）就别再动镜头
       if (this.data.view !== 'full' && this.data.view !== 'small') {

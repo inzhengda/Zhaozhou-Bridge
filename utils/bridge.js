@@ -149,7 +149,10 @@ const C = {
   ground: [122, 116,  99],
   bed:    [100,  96,  84],
   water:  [ 40, 106, 130],
-  hi:     [216, 104,  60]
+  hi:     [216, 104,  60],
+  // 小拱洞的底影。比侧墙深两档：洞里没有阳光直射，只有拱背那道斜面
+  // 反着一点天光——不压暗这一层，洞口就和墙面一个色，读不出"隧道"
+  tunnel: [128, 120, 106]
 }
 
 // ================= 营造时序（秒）=================
@@ -374,6 +377,43 @@ function slabMesh(x0, x1, y0, y1, z0, z1, color) {
   return m
 }
 
+/**
+ * 小拱洞的底影。洞里的"地面"就是主拱拱背（含护拱石）那道斜面，
+ * 它的网格来自 28 道券的外皮——颜色和侧墙几乎一样，平光下一片米色，
+ * 洞口看上去就像被实体填平了。这一层沿拱背贴一条暗带（比拱背高 3 mm，
+ * 只为了在画家算法里稳定压住券皮），洞立刻就有了进深：券圈是亮的，
+ * 洞底是暗的，中间透出对岸的光。
+ *
+ * 分 7 小步沿拱背走，每步左右各一条；x 取负的那侧绕序反过来，
+ * 否则法线朝下，整条带被背面剔除吃掉。
+ */
+function tunnelShadowMesh() {
+  const m = mesh.newMesh()
+  mesh.setSeed(4241)
+  for (let i = 0; i < SMALL.length; i++) {
+    const s = SMALL[i]
+    const n = 7
+    for (let k = 0; k < n; k++) {
+      const xa = s.x0 + (s.x1 - s.x0) * k / n
+      const xb = s.x0 + (s.x1 - s.x0) * (k + 1) / n
+      const ya = haunchTop(xa) + 0.03, yb = haunchTop(xb) + 0.03
+      const wa = halfWidth(xa) - 0.06, wb = halfWidth(xb) - 0.06
+      const tone = k % 2 ? 1.05 : 0.95
+      const col = [Math.round(C.tunnel[0] * tone),
+                   Math.round(C.tunnel[1] * tone),
+                   Math.round(C.tunnel[2] * tone)]
+      for (let sg = -1; sg <= 1; sg += 2) {
+        if (sg > 0) {
+          mesh.quad(m, [xa, ya, -wa], [xa, ya, wa], [xb, yb, wb], [xb, yb, -wb], col, 1)
+        } else {
+          mesh.quad(m, [-xa, ya, wa], [-xa, ya, -wa], [-xb, yb, -wb], [-xb, yb, wb], col, 1)
+        }
+      }
+    }
+  }
+  return m
+}
+
 // ================= 侧墙 / 桥台分条 =================
 
 // |x| 方向的分条。小拱洞所在区间单独细分，侧墙才能贴着弧线切出洞形。
@@ -389,6 +429,26 @@ const X_RUNS = [
   [15.60, 19.41, 18],       // 外小拱洞
   [19.41, ABUT_X1, 3]       // 端墙（落在桥台上）
 ]
+
+/**
+ * 竖直棱柱沿 z 的切片数。
+ *
+ * 侧墙、桥台、桥面原先是一整条 9.6 m 贯通桥宽的棱柱。渲染器逐面算平均
+ * 深度，大面的深度落在面心——一块 9.6 m 宽的侧面，斜着看时近端比面心
+ * 近 4 m、远端比面心远 4 m，排序就不可靠：相邻墙条的端面互相咬，桥面
+ * 被栏板/侧墙啃掉一角。切成 4 薄片后每片面心离真实深度只差零点几米，
+ * 斜视角下也咬不动了。（地形当初为同一件事切过 z，见 TERRAIN_ZS 的注释。）
+ */
+const Z_SLICES = 4
+
+/** 把 [-hw, hw] 均分成 Z_SLICES 段 */
+function zSlabs(hw) {
+  const out = []
+  for (let i = 0; i < Z_SLICES; i++) {
+    out.push([-hw + 2 * hw * i / Z_SLICES, -hw + 2 * hw * (i + 1) / Z_SLICES])
+  }
+  return out
+}
 
 /**
  * 侧墙（isBase = false）或桥台（isBase = true）沿 x 分条，
@@ -407,8 +467,10 @@ function wallStrips(open, isBase) {
     if (isBase) {
       // 桥台：五层条石基础之上，砌到起拱线
       if (ABUT_TOP - ABUT_BOT < 0.03) return
-      mesh.prismZ(m, [[A, ABUT_BOT], [B, ABUT_BOT], [B, ABUT_TOP], [A, ABUT_TOP]],
-        -hw, hw, col)
+      for (const [za, zb] of zSlabs(hw)) {
+        mesh.prismZ(m, [[A, ABUT_BOT], [B, ABUT_BOT], [B, ABUT_TOP], [A, ABUT_TOP]],
+          za, zb, col)
+      }
     } else {
       const dA = deckBottom(A), dB = deckBottom(B)
       const s = open ? smallAt((xa + xb) / 2) : null
@@ -421,12 +483,16 @@ function wallStrips(open, isBase) {
         // 该处根本不需要补料，补了反而在券脚之间糊出一块石头。
         const eA = smallExtrados(s, A), eB = smallExtrados(s, B)
         if (dA > eA + 0.02 && dB > eB + 0.02) {
-          mesh.prismZ(m, [[A, eA], [B, eB], [B, dB], [A, dA]], -hw, hw, col)
+          for (const [za, zb] of zSlabs(hw)) {
+            mesh.prismZ(m, [[A, eA], [B, eB], [B, dB], [A, dA]], za, zb, col)
+          }
         }
       } else {
         const wA = wallBottom(A), wB = wallBottom(B)
         if (dA > wA + 0.02 && dB > wB + 0.02) {
-          mesh.prismZ(m, [[A, wA], [B, wB], [B, dB], [A, dA]], -hw, hw, col)
+          for (const [za, zb] of zSlabs(hw)) {
+            mesh.prismZ(m, [[A, wA], [B, wB], [B, dB], [A, dA]], za, zb, col)
+          }
         }
       }
     }
@@ -472,17 +538,19 @@ function foundationStrips() {
 
 /** 桥面：沿桥长按弧线分段的石板，每段一个构件 */
 function deckSegments() {
-  const n = 10
+  const n = 14
   const out = []
   for (let k = 0; k < n; k++) {
     const xa = -DECK_HALF + 2 * DECK_HALF * (k / n)
     const xb = -DECK_HALF + 2 * DECK_HALF * ((k + 1) / n)
     const hw = halfWidth(xa) + 0.25                 // 桥面比拱券略宽，挑出一点檐
     const m = mesh.newMesh()
-    mesh.prismZ(m, [
-      [xa, deckBottom(xa)], [xb, deckBottom(xb)],
-      [xb, deckTop(xb)], [xa, deckTop(xa)]
-    ], -hw, hw, C.deck)
+    for (const [za, zb] of zSlabs(hw)) {
+      mesh.prismZ(m, [
+        [xa, deckBottom(xa)], [xb, deckBottom(xb)],
+        [xb, deckTop(xb)], [xa, deckTop(xa)]
+      ], za, zb, C.deck)
+    }
     out.push({ mesh: m, center: mesh.centerOf(m), ax: (xa + xb) / 2 })
   }
   return out
@@ -597,6 +665,144 @@ function terrainMesh() {
   return m
 }
 
+// ================= 岸上景物 =================
+
+/**
+ * 两岸的有人烟迹象：官道、纤道、树、村舍。
+ *
+ * 原先两岸就是两片土色，桥再好看也像沙盘。这里补的几样都刻意压着
+ * 调子：路面比地面亮一档，树是两种灰绿，屋顶青灰——不抢桥的戏。
+ *
+ * 摆放全部是确定性公式（sin 抖动 + 固定表），没有 Math.random：
+ * 场景每帧重建，随机的树每帧换地方，整片岸就"活"了——那是 bug 不是生气。
+ * 树冠用八面体凑合，小面片多了逐面排序的开销先爆炸。
+ */
+function sceneryMeshes() {
+  const road = mesh.newMesh(), greens = mesh.newMesh(), houses = mesh.newMesh()
+  mesh.setSeed(7301)
+  const gY = function (x, z) { return groundY(Math.abs(x)) + bankRelief(x, z) }
+  const frac = function (v) { return v - Math.floor(v) }
+
+  // 把三个 [x,y,z] 压进网格并返回顶点索引（八面体、山墙这类三角面用）
+  const vertsOf = function (m, pts) {
+    const idx = []
+    for (let i = 0; i < pts.length; i++) {
+      idx.push(mesh.vert(m, pts[i][0], pts[i][1], pts[i][2]))
+    }
+    return idx
+  }
+
+  // 顶面四边形，按 x0→x1 的方向自动选绕序，保证法线朝上
+  const topQuad = function (m, x0, x1, z0, z1, lift, col) {
+    const y00 = gY(x0, z0) + lift, y01 = gY(x0, z1) + lift
+    const y10 = gY(x1, z0) + lift, y11 = gY(x1, z1) + lift
+    if (x1 >= x0) {
+      mesh.quad(m, [x0, y00, z0], [x0, y01, z1], [x1, y11, z1], [x1, y10, z0], col, 1)
+    } else {
+      mesh.quad(m, [x1, y10, z0], [x1, y11, z1], [x0, y01, z1], [x0, y00, z0], col, 1)
+    }
+  }
+
+  // ---- 官道：从桥堍接出去，随岸顶起伏 ----
+  const XS = [32, 36, 40, 44, 48, 54, 62, 72, 88]
+  for (let sg = -1; sg <= 1; sg += 2) {
+    for (let k = 0; k < XS.length - 1; k++) {
+      const tone = 1 + 0.035 * Math.sin(XS[k] * 0.8 + sg)
+      topQuad(road, sg * XS[k], sg * XS[k + 1], -2.2, 2.2, 0.05,
+        [Math.round(186 * tone), Math.round(170 * tone), Math.round(138 * tone)])
+    }
+  }
+
+  // ---- 纤道：贴着水边一条窄便道 ----
+  for (let sg = -1; sg <= 1; sg += 2) {
+    for (let z = -66; z < 6; z += 12) {
+      topQuad(road, sg * 29.0, sg * 30.6, z, Math.min(z + 12, 6), 0.05,
+        [176, 162, 132])
+    }
+  }
+
+  // ---- 树：树干一个细盒，树冠一个八面体 ----
+  const trunkC = [122, 94, 66]
+  const leafA = [116, 128, 82], leafB = [128, 138, 92]
+  const tree = function (x, z, big) {
+    const f1 = frac(Math.sin(x * 12.9 + z * 3.7) * 437.58)
+    const f2 = frac(f1 * 91.7)
+    const base = gY(x, z) - 0.15
+    const h = (1.5 + 0.9 * f1) * (big ? 1.5 : 1)
+    const r = (1.1 + 0.7 * f2) * (big ? 1.45 : 1)
+    const tw = big ? 0.13 : 0.09
+    mesh.box(greens, x - tw, x + tw, base, base + h, z - tw, z + tw, trunkC)
+    const cy = base + h + r * 0.62
+    const leaf = f1 > 0.5 ? leafA : leafB
+    const T = [x, cy + r], Bm = [x, cy - r * 0.9]
+    const px = [x + r, cy, z], nx = [x - r, cy, z]
+    const pz = [x, cy, z + r], nz = [x, cy, z - r]
+    mesh.face(greens, vertsOf(greens, [px, T, pz]), leaf)
+    mesh.face(greens, vertsOf(greens, [pz, T, nx]), leaf)
+    mesh.face(greens, vertsOf(greens, [nx, T, nz]), leaf)
+    mesh.face(greens, vertsOf(greens, [nz, T, px]), leaf)
+    mesh.face(greens, vertsOf(greens, [px, pz, Bm]), leaf)
+    mesh.face(greens, vertsOf(greens, [pz, nx, Bm]), leaf)
+    mesh.face(greens, vertsOf(greens, [nx, nz, Bm]), leaf)
+    mesh.face(greens, vertsOf(greens, [nz, px, Bm]), leaf)
+  }
+  // 河边一排（贴着常水位以上的岸坡），里侧一排错开
+  for (let sg = -1; sg <= 1; sg += 2) {
+    for (let i = 0; i < 7; i++) {
+      const z = 8 - i * 11 - 3 * frac(Math.sin(i * 7.3 + sg) * 9.91)
+      tree(sg * (30.2 + 2.6 * frac(Math.sin(z * 0.37 + sg * 2))), z, false)
+    }
+    for (let i = 0; i < 6; i++) {
+      const z = 3 - i * 12 - 4 * frac(Math.sin(i * 4.9 - sg) * 6.77)
+      tree(sg * (38 + 4 * frac(Math.sin(z * 0.29 - sg))), z, false)
+    }
+  }
+  tree(-28.5, 6.5, true)
+  tree(28.5, -6.5, true)
+
+  // ---- 村舍：灰瓦土墙，门朝着河 ----
+  const wallC = [206, 196, 176], roofC = [96, 92, 88], doorC = [84, 72, 62]
+  const house = function (x, z, w, d) {
+    const y0 = gY(x, z) - 0.35
+    const y1 = y0 + 2.2 + 0.3 * frac(Math.sin(x * 5.1 + z))
+    const ridge = y1 + 0.85
+    const ov = 0.28
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2
+    mesh.box(houses, x0, x1, y0, y1, z0, z1, wallC)
+    // 两坡屋顶，屋脊沿 z（顺河）；两个坡面 + 两片山墙
+    mesh.quad(houses,
+      [x0 - ov, y1 + 0.1, z0 - ov], [x0 - ov, y1 + 0.1, z1 + ov],
+      [x, ridge, z1 + ov], [x, ridge, z0 - ov], roofC)
+    mesh.quad(houses,
+      [x, ridge, z0 - ov], [x, ridge, z1 + ov],
+      [x1 + ov, y1 + 0.1, z1 + ov], [x1 + ov, y1 + 0.1, z0 - ov], roofC)
+    mesh.face(houses, vertsOf(houses, [
+      [x0 - ov, y1 + 0.1, z0 - ov], [x, ridge, z0 - ov], [x1 + ov, y1 + 0.1, z0 - ov]]), wallC)
+    mesh.face(houses, vertsOf(houses, [
+      [x1 + ov, y1 + 0.1, z1 + ov], [x, ridge, z1 + ov], [x0 - ov, y1 + 0.1, z1 + ov]]), wallC)
+    // 门开在朝河的那一侧（z<0 的房子门朝 +z，反之朝 -z）
+    const zd = z < 0 ? z1 + 0.02 : z0 - 0.02
+    const doorPts = [
+      [x - 0.4, y0 + 0.15, zd], [x - 0.4, y0 + 1.5, zd],
+      [x + 0.4, y0 + 1.5, zd], [x + 0.4, y0 + 0.15, zd]
+    ]
+    if (z < 0) doorPts.reverse() // 反转绕序，让法线朝 +z 的河面
+    mesh.quad(houses, doorPts[0], doorPts[1], doorPts[2], doorPts[3], doorC)
+  }
+  for (let sg = -1; sg <= 1; sg += 2) {
+    house(sg * 38, -14, 4.2, 3.4)
+    house(sg * 46, -22, 3.8, 3.2)
+    house(sg * 55, -13, 4.4, 3.6)
+    house(sg * 64, -25, 4.0, 3.3)
+    house(sg * 49, 12, 3.9, 3.4)
+    house(sg * 60, 17, 4.3, 3.5)
+    house(sg * 72, -18, 4.1, 3.4)
+    house(sg * 80, 11, 3.8, 3.2)
+  }
+
+  return { road: road, greens: greens, houses: houses }
+}
+
 // ================= 场景装配 =================
 
 function buildScene() {
@@ -650,6 +856,15 @@ function buildScene() {
       inOffset: [0, 0, 0], mode: 'fade', color: C.haunch
     })
   }
+
+  // ---- 3.5 小拱洞的底影。洞的进深全靠这一条暗带 ----
+  pieces.push({
+    id: 'tunnel', group: 'tunnel', kind: 'mesh',
+    mesh: tunnelShadowMesh(), pivot: [SMALL[1].xc, 4.5, 0],
+    t0: T.small[0], t1: T.small[0] + 1.2,
+    inOffset: [0, 0, 0], mode: 'fade', color: C.tunnel,
+    hideInSolid: true
+  })
 
   // ---- 4. 拱上侧墙（敞肩 / 实肩两套，顺序一一对应）----
   const openParts = wallStrips(true, false)
@@ -715,7 +930,10 @@ function buildScene() {
     })
   }
 
-  return { pieces: pieces, rings: rings, terrain: terrainMesh(), total: TOTAL }
+  return {
+    pieces: pieces, rings: rings,
+    terrain: terrainMesh(), scenery: sceneryMeshes(), total: TOTAL
+  }
 }
 
 module.exports = {
