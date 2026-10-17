@@ -16,12 +16,13 @@
     <view class="title-sub">隋 · 大业年间 595—605 · 匠人李春</view>
   </view>
   <view class="topbtns" style="top:{{topBtn}}px">
+    <view class="src-btn" bindtap="onTourOpen">导览</view>
     <view class="src-btn" bindtap="onToggleSec">剖面图</view>
     <view class="src-btn" bindtap="onToggleSrc">数据出处</view>
   </view>
 
   <!-- 营造阶段卡。剖面图铺开时这三张卡一概让位，不然和剖面挤在一起 -->
-  <view class="phase" wx:if="{{mode === 'build' && !sec}}" style="top:{{topCard}}px">
+  <view class="phase" wx:if="{{mode === 'build' && !sec && !focus}}" style="top:{{topCard}}px">
     <view class="phase-name">{{phaseName}}</view>
     <view class="phase-desc">{{phaseDesc}}</view>
     <view class="bar"><view class="bar-fill" style="width:{{progressPct}}%"></view></view>
@@ -32,7 +33,7 @@
   </view>
 
   <!-- 泄洪读数 -->
-  <view class="hud" wx:if="{{mode === 'flood' && !sec}}" style="top:{{topCard}}px">
+  <view class="hud" wx:if="{{mode === 'flood' && !sec && !focus}}" style="top:{{topCard}}px">
     <view class="hud-row">
       <view class="cell">
         <view class="cell-v">{{readout.h}}</view>
@@ -63,10 +64,21 @@
     </view>
   </view>
 
+  <!-- 部位聚焦卡。轻点桥身落在锚点 40 px 内就飞到特写机位并弹出；
+       打开时盖掉同位置的读数/阶段卡，关掉即回——两张卡不该同屏叠字 -->
+  <view class="focus" wx:if="{{focus}}" style="top:{{topCard}}px">
+    <view class="focus-head">
+      <text class="focus-name">{{focus.name}}</text>
+      <text class="focus-close" bindtap="onFocusClose">收起</text>
+    </view>
+    <view class="focus-l1">{{focus.l1}}</view>
+    <view class="focus-l2">{{focus.l2}}</view>
+  </view>
+
   <!-- 敞肩 / 实肩 对比。左栏是此刻的水力对比，右栏是四个小拱静态的
        省料账，最后一行横跨两栏。八行竖排要 190 px 高，会压到桥面上——
        竖屏上半只有 300 px 可用（桥顶在 390 px 上下），分两栏才收得进 -->
-  <view class="cmp" wx:if="{{mode === 'flood' && open && !sec}}" style="top:{{topCmp}}px">
+  <view class="cmp" wx:if="{{mode === 'flood' && open && !sec && !focus}}" style="top:{{topCmp}}px">
     <view class="cmp-row">
       <view class="cmp-col">
         <view class="cmp-title">敞肩之利（相对实肩拱）</view>
@@ -155,8 +167,24 @@
         拖动旋转，双指缩放。外侧两个小拱在 {{qOuter}} m³/s 开始过水，内侧两个要
         涨到 {{qInner}} m³/s——尺子上点一段可直接跳到那一档。
         切「实肩拱」看没有小拱时的过水，开「受力」看重量怎么沿拱轴压到两岸。
+        轻点拱、券、桥台等部位可聚焦细看。
       </view>
     </block>
+  </view>
+
+  <!-- 说课导览。盖在控制台之上：导览进行中只留上一步/下一步，其余控件先收起，
+       避免和底部按钮抢屏幕。写在 panel 之后，同级绝对定位按书写次序叠放 -->
+  <view class="tour" wx:if="{{tour !== null}}">
+    <view class="tour-head">
+      <view class="tour-step">{{tourIdx + 1}} / {{tourTotal}}</view>
+      <view class="tour-name">{{tourName}}</view>
+      <view class="tour-exit" bindtap="onTourExit">退出</view>
+    </view>
+    <view class="tour-text">{{tourText}}</view>
+    <view class="tour-btns">
+      <view class="tour-btn prev {{tourIdx === 0 ? 'off' : ''}}" bindtap="onTourPrev">上一步</view>
+      <view class="tour-btn main" bindtap="onTourNext">{{tourIdx + 1 === tourTotal ? '完成' : '下一步'}}</view>
+    </view>
   </view>
 
   <!-- 史料出处。必须放在最后：这一层要盖住上面的读数卡和控制台，
