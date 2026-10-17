@@ -756,7 +756,8 @@ Page({
     // ---- 马车（受力模式下动载来回走）----
     if (this.cartMesh && this.data.thrust && !this.data.sec && !this.data.focus && !flood) {
       const dy = B.deckTop(this.cartX) - B.deckTop(0)
-      R.pushMeshT(sc, this.cartMesh, this.cartX, dy, 0, wo)
+      // 推车轮底贴着桥面，和桥面挂同一排序偏置，陡视角下轮子不会被桥面啃掉
+      R.pushMeshT(sc, this.cartMesh, this.cartX, dy, 0, { ...wo, dBias: -0.35 })
     }
 
     // ---- 坦拱对照 ----
@@ -826,7 +827,7 @@ Page({
 
       const mesh = (solid && p.alt) ? p.alt : p.mesh
       const e = M.easeOutCubic(pr)
-      const wp = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint }
+      const wp = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint, dBias: p.dBias }
 
       if (pr < 1) {
         // 未落位：从引导位置飞入，尚未抹灰所以偏暖色

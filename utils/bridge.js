@@ -423,11 +423,12 @@ function tunnelShadowMesh() {
 // 18 条把台阶压到 0.21 m，正视时不到 2 px，弧就顺了。
 // 其余各段是直边，用不着这么密。
 const X_RUNS = [
-  [0.00,  11.60, 6],        // 拱顶实肩
+  [0.00,  11.60, 10],       // 拱顶实肩：顶面离洞顶仅 0.6 m 上下，俯视时要
+                            // 和桥面、洞底比深度，条必须切到 1.2 m 上下
   [11.60, 14.45, 18],       // 内小拱洞
   [14.45, 15.60, 1],        // 两洞之间的墩
   [15.60, 19.41, 18],       // 外小拱洞
-  [19.41, ABUT_X1, 3]       // 端墙（落在桥台上）
+  [19.41, ABUT_X1, 8]       // 端墙（落在桥台上）。条宽 ≤1.6 m，理由同上
 ]
 
 /**
@@ -438,8 +439,14 @@ const X_RUNS = [
  * 近 4 m、远端比面心远 4 m，排序就不可靠：相邻墙条的端面互相咬，桥面
  * 被栏板/侧墙啃掉一角。切成 4 薄片后每片面心离真实深度只差零点几米，
  * 斜视角下也咬不动了。（地形当初为同一件事切过 z，见 TERRAIN_ZS 的注释。）
+ *
+ * 4 片治的是**平视斜看**（偏航方向）的毛病。俯视是另一条战线：桥面顶、
+ * 墙顶、洞顶是一摞只差 0.5～0.7 m 的水平面（见 deckSegments 的注释），
+ * 2.4 m 宽的薄片从高处看时面心深度照样兜不住，洞口会透出桥面、墙顶会
+ * 翻到桥面上来。8 片把薄片宽度压到 1.2 m，再配上桥面的 x 向细分和桥面
+ * −0.35 的排序偏置，俯仰全程（pitch −0.45～0.95）都不再咬穿。
  */
-const Z_SLICES = 4
+const Z_SLICES = 8
 
 /** 把 [-hw, hw] 均分成 Z_SLICES 段 */
 function zSlabs(hw) {
@@ -538,6 +545,15 @@ function foundationStrips() {
 
 /** 桥面：沿桥长按弧线分段的石板，每段一个构件 */
 function deckSegments() {
+  // 营造动画单元保持 14 段，但每段的网格在 x 向再细分：渲染器按面心平均
+  // 深度排序（见 Z_SLICES 的注释），桥面顶与墙顶只差一层 DECK_TH = 0.5 m，
+  // 一块 4.6 m 长的桥面大面从高处看时，面心深度和底下的墙顶差出个 1 m
+  // 都可能，排序就会翻——洞顶从桥面上透出来。切到 1.2 m 并让分缝落在
+  // 墙条边界上，上下两层格线咬齐，深度差才稳稳落在桥面这边。
+  const WALL_CUTS = []
+  for (const run of X_RUNS) for (const b of [run[0], run[1]]) {
+    if (!WALL_CUTS.includes(b)) WALL_CUTS.push(b)
+  }
   const n = 14
   const out = []
   for (let k = 0; k < n; k++) {
@@ -545,11 +561,25 @@ function deckSegments() {
     const xb = -DECK_HALF + 2 * DECK_HALF * ((k + 1) / n)
     const hw = halfWidth(xa) + 0.25                 // 桥面比拱券略宽，挑出一点檐
     const m = mesh.newMesh()
-    for (const [za, zb] of zSlabs(hw)) {
-      mesh.prismZ(m, [
-        [xa, deckBottom(xa)], [xb, deckBottom(xb)],
-        [xb, deckTop(xb)], [xa, deckTop(xa)]
-      ], za, zb, C.deck)
+    // 单元内的 x 分缝：1.2 m 均分，再并入压在单元里的墙条边界（含负半桥）
+    const cuts = [xa]
+    for (const b of WALL_CUTS) for (const s of [b, -b]) {
+      if (s > xa + 0.01 && s < xb - 0.01 && !cuts.includes(s)) cuts.push(s)
+    }
+    const steps = Math.max(1, Math.ceil((xb - xa) / 1.2))
+    for (let i = 1; i < steps; i++) {
+      const u = xa + (xb - xa) * i / steps
+      if (!cuts.includes(u)) cuts.push(u)
+    }
+    cuts.sort((a, b) => a - b)
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const ua = cuts[i], ub = cuts[i + 1]
+      for (const [za, zb] of zSlabs(hw)) {
+        mesh.prismZ(m, [
+          [ua, deckBottom(ua)], [ub, deckBottom(ub)],
+          [ub, deckTop(ub)], [ua, deckTop(ua)]
+        ], za, zb, C.deck)
+      }
     }
     out.push({ mesh: m, center: mesh.centerOf(m), ax: (xa + xb) / 2 })
   }
@@ -1003,7 +1033,12 @@ function buildScene() {
       id: 'deck-' + i, group: 'deck', kind: 'mesh',
       mesh: p.mesh, pivot: p.center,
       t0: t0, t1: t0 + (d1 - d0) * 0.62,
-      inOffset: [0, 3.5, 0], mode: 'drop', color: C.deck
+      inOffset: [0, 3.5, 0], mode: 'drop', color: C.deck,
+      // 桥面要永远盖住底下 0.5～0.7 m 的墙顶/洞顶，是全桥排序余量最小的
+      // 一层，往相机方向压 0.35 m 兜底。栏板顶比桥面顶高 0.78 m，54° 俯视
+      // 时近 0.63 m，压 0.35 m 不会反过来吃掉栏板；推车挂同一偏置，轮底
+      // 贴着桥面也不会被桥面啃掉。
+      dBias: -0.35
     })
   }
 
