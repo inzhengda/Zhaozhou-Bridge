@@ -229,17 +229,7 @@ page {
   color: rgba(43, 39, 35, 0.38);
 }
 
-.src-note {
-  margin-top: 26rpx;
-  padding: 16rpx 18rpx;
-  border-radius: 10rpx;
-  background: rgba(158, 132, 96, 0.13);
-  font-size: 19rpx;
-  line-height: 1.6;
-  color: rgba(43, 39, 35, 0.6);
-}
-
-/* ---------- 营造阶段卡 ---------- */
+ /* ---------- 营造阶段卡 ---------- */
 
 .phase {
   position: absolute;

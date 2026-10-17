@@ -250,14 +250,7 @@
             <text class="an-s">{{item.s}}</text>
           </view>
         </view>
-        <view class="src-note">
-          年表只记「哪一年出了什么事」。朝代能断到年的才写年；标「通行说法」的，
-          是流传很广但没找到一手文献的。
-        </view>
       </block>
-      <view class="src-note" wx:else>
-        标【本模型】的条目是这个小程序自己算的，不是史料数字。其余均为文献值或通行数据。
-      </view>
     </scroll-view>
   </view>
 </view>
