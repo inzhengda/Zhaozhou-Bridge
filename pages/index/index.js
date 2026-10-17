@@ -507,6 +507,12 @@ Page({
       const u = (this.floodT % 1 + 1) % 1
       const pulse = Math.pow(Math.sin(Math.PI * u), 1.7)
       this.st.q = Q_MIN + (Q_MAX - Q_MIN) * pulse
+    } else if (this.st.q !== this.data.q) {
+      // 水位呈现值向滑块目标指数逼近：点档位、拖滑块时水面是涨落过去的，
+      // 不是瞬移；读数卡也读呈现值，数字才和画面里的水对得上
+      const k = 1 - Math.exp(-dt / 0.35)
+      const diff = this.data.q - this.st.q
+      this.st.q += Math.abs(diff) < 1 ? diff : diff * k
     }
 
     // 拆解程度缓慢跟随开关，散开与并拢都有个过程，看得清券是怎么分开的
@@ -517,6 +523,17 @@ Page({
       if (Math.abs(this.ex - want) < 0.004) this.ex = want
     }
 
+    // 松手惯性：手势里采到的角速度按指数衰减继续带一段，快甩多转、慢拖不飘
+    if (this.spin && !this.anim) {
+      const c = this.cam
+      c.yaw += this.spin.vyaw * dt
+      c.pitch = clamp(c.pitch + this.spin.vpitch * dt, -0.45, 0.95)
+      this.clampOrbit()
+      const decay = Math.exp(-dt / 0.4)
+      this.spin.vyaw *= decay
+      this.spin.vpitch *= decay
+      if (Math.abs(this.spin.vyaw) < 0.02 && Math.abs(this.spin.vpitch) < 0.02) this.spin = null
+    }
     this.stepCameraAnim(dt)
     this.stepDetail()
     this.draw(dt)
@@ -656,7 +673,7 @@ Page({
 
     const flood = this.data.mode === 'flood'
     const t = flood ? B.TOTAL : this.st.t
-    const q = flood ? this.data.q : 0
+    const q = flood ? this.st.q : 0
 
     let ev = null
     if (flood) ev = H.evaluate(q)
@@ -2195,7 +2212,7 @@ Page({
       const bd = this.bandsAt(this.data.q)
       if (bd !== this.data.band) d.band = bd
 
-      const ev = H.evaluate(this.data.q)
+      const ev = H.evaluate(this.st.q)
       const o = ev.open, s = ev.solid
       d.readout = {
         h: o.h.toFixed(2),
@@ -2242,6 +2259,11 @@ Page({
 
   onTouchStart(e) {
     this.anim = null
+    // 新手势接管：上一把的惯性停掉，速度采样归零重来
+    this.spin = null
+    this.vyaw = 0
+    this.vpitch = 0
+    this.moveAt = 0
     if (this.data.view !== 'free') this.setData({ view: 'free' })
     const ts = e.touches
     if (ts.length >= 2) {
@@ -2271,12 +2293,32 @@ Page({
     this.cam.yaw = this.yaw0 - dx * 0.006
     this.cam.pitch = clamp(this.pitch0 + dy * 0.005, -0.45, 0.95)
     this.clampOrbit()
+    // 采手指角速度给惯性用：单帧差分噪声大，掺三成上一帧的值抹平
+    const now = Date.now()
+    if (this.moveAt) {
+      const mdt = Math.max(0.008, (now - this.moveAt) / 1000)
+      const ivy = (-(ts[0].x - this.lastX) * 0.006) / mdt
+      const ivp = ((ts[0].y - this.lastY) * 0.005) / mdt
+      this.vyaw = 0.7 * this.vyaw + 0.3 * ivy
+      this.vpitch = 0.7 * this.vpitch + 0.3 * ivp
+    }
+    this.lastX = ts[0].x
+    this.lastY = ts[0].y
+    this.moveAt = now
   },
 
   onTouchEnd(e) {
     // 轻点 = 没怎么移动、也没按多久：落到部位锚点附近就聚焦，点空了收掉
     const t0 = this.tap0
     this.pt = null; this.pinch0 = 0; this.tap0 = null
+    // 松手惯性：手指 90 ms 内还在动就把角速度带进 tick，上限压住别甩过头
+    if (this.moveAt && Date.now() - this.moveAt < 90) {
+      const vy = clamp(this.vyaw, -2.4, 2.4)
+      const vp = clamp(this.vpitch, -2.4, 2.4)
+      if (Math.abs(vy) > 0.15 || Math.abs(vp) > 0.15) {
+        this.spin = { vyaw: vy, vpitch: vp }
+      }
+    }
     if (!t0 || !e || !e.changedTouches || !e.changedTouches.length) return
     const tt = e.changedTouches[0]
     const dx = tt.x - t0.x, dy = tt.y - t0.y
@@ -2359,7 +2401,7 @@ Page({
     }
     if (s.data) for (const k in s.data) d[k] = s.data[k]
     if (s.t !== undefined) this.st.t = s.t
-    if (s.q !== undefined) { this.st.q = s.q; d.q = s.q; d.band = this.bandsAt(s.q) }
+    if (s.q !== undefined) { d.q = s.q; d.band = this.bandsAt(s.q) }
     if (s.split) {
       d.split = true
       this.st.t = B.TOTAL
@@ -2428,7 +2470,7 @@ Page({
   },
 
   onQ(e) {
-    this.st.q = e.detail.value
+    // 只记目标值：水面呈现值 st.q 在 tick 里缓动跟上来，不瞬移
     this.setData({
       q: e.detail.value, band: this.bandsAt(e.detail.value), autoFlood: false
     })
@@ -2445,7 +2487,7 @@ Page({
   onBand(e) {
     const q = +e.currentTarget.dataset.q
     if (!q || q === this.data.q) return
-    this.st.q = q
+    // 目标值交给 tick 缓动：跳档瞬间水面从当前位置涨落过去
     this.setData({ q: q, band: this.bandsAt(q), autoFlood: false })
   },
   onToggleSpandrel() {

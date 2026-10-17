@@ -632,3 +632,24 @@ page {
   color: #fdf6ec;
   background: #c4563a;
 }
+
+/* ==================== 按压反馈与触控目标 ====================
+   view 原生 hover-class：按下补上 .pressed，0.12 s 过渡让按下和
+   回弹都看得见。触控高度同步抬到 28–40 px——教学场景老人小孩都在用，
+   误触比按钮走形更伤体验 */
+
+.src-btn, .tab, .btn, .chip, .band, .tour-btn, .tour-exit, .focus-close, .src-close, .src-tab {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.pressed {
+  transform: scale(0.95);
+  opacity: 0.82;
+}
+
+.src-btn { min-height: 56rpx; display: flex; align-items: center; }
+.tab { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
+.btn { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
+.chip { min-height: 64rpx; display: flex; align-items: center; justify-content: center; }
+.band { min-height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.tour-btn { min-height: 80rpx; display: flex; align-items: center; justify-content: center; }

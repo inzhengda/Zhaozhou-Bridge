@@ -87,6 +87,9 @@ function makePage({ w, h, data, view, cam, detail }) {
 
   // ---- onLoad 那几行 ----
   page.st = { t: 0, q: Q_DEF }
+  // 泄洪镜头的水位跟着镜头数据走：draw 读呈现值 st.q（真机上由 tick
+  // 缓动逼近 data.q），离屏渲染没有 tick，直接取镜头给的同一值
+  if (data && data.q !== undefined) page.st.q = data.q
   page.animT = 0        // 波面相位钟。漏了它 wave() 里 undefined*speed=NaN，
                         // 整个水面（和倒影）会被近平面裁剪静默丢弃
   const v = VIEWS[view || 'full']

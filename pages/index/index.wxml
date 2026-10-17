@@ -16,9 +16,9 @@
     <view class="title-sub">隋 · 大业年间 595—605 · 匠人李春</view>
   </view>
   <view class="topbtns" style="top:{{topBtn}}px">
-    <view class="src-btn" bindtap="onTourOpen">导览</view>
-    <view class="src-btn" bindtap="onToggleSec">剖面图</view>
-    <view class="src-btn" bindtap="onToggleSrc">数据出处</view>
+    <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onTourOpen">导览</view>
+    <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onToggleSec">剖面图</view>
+    <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onToggleSrc">数据出处</view>
   </view>
 
   <!-- 营造阶段卡。剖面图铺开时这三张卡一概让位，不然和剖面挤在一起 -->
@@ -69,7 +69,7 @@
   <view class="focus" wx:if="{{focus}}" style="top:{{topCard}}px">
     <view class="focus-head">
       <text class="focus-name">{{focus.name}}</text>
-      <text class="focus-close" bindtap="onFocusClose">收起</text>
+      <text class="focus-close" aria-role="button" bindtap="onFocusClose">收起</text>
     </view>
     <view class="focus-l1">{{focus.l1}}</view>
     <view class="focus-l2">{{focus.l2}}</view>
@@ -99,14 +99,14 @@
   <!-- 底部控制台 -->
   <view class="panel">
     <view class="tabs">
-      <view class="tab {{mode === 'build' ? 'on' : ''}}" data-mode="build" bindtap="onTab">营 造</view>
-      <view class="tab {{mode === 'flood' ? 'on' : ''}}" data-mode="flood" bindtap="onTab">泄 洪</view>
+      <view class="tab {{mode === 'build' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-mode="build" bindtap="onTab">营 造</view>
+      <view class="tab {{mode === 'flood' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-mode="flood" bindtap="onTab">泄 洪</view>
     </view>
 
     <block wx:if="{{mode === 'build'}}">
       <view class="ctrl">
-        <view class="btn" bindtap="onTogglePlay">{{playing ? '暂停' : '播放'}}</view>
-        <view class="btn ghost" bindtap="onRestart">重砌</view>
+        <view class="btn" hover-class="pressed" aria-role="button" bindtap="onTogglePlay">{{playing ? '暂停' : '播放'}}</view>
+        <view class="btn ghost" hover-class="pressed" aria-role="button" bindtap="onRestart">重砌</view>
         <slider
           class="grow" min="0" max="1000" value="{{progressPct * 10}}"
           block-size="14" activeColor="#c4563a" backgroundColor="#d8cfbd"
@@ -122,14 +122,14 @@
         />
       </view>
       <view class="views">
-        <view class="chip {{view === 'full' ? 'on' : ''}}" data-v="full" bindtap="onView">全景</view>
-        <view class="chip {{view === 'under' ? 'on' : ''}}" data-v="under" bindtap="onView">拱下</view>
-        <view class="chip {{view === 'small' ? 'on' : ''}}" data-v="small" bindtap="onView">小拱</view>
-        <view class="chip {{flat ? 'on' : ''}}" bindtap="onToggleFlat">坦拱对照</view>
-        <view class="chip {{split ? 'on' : ''}}" bindtap="onToggleSplit">
+        <view class="chip {{view === 'full' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-v="full" bindtap="onView">全景</view>
+        <view class="chip {{view === 'under' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-v="under" bindtap="onView">拱下</view>
+        <view class="chip {{view === 'small' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-v="small" bindtap="onView">小拱</view>
+        <view class="chip {{flat ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleFlat">坦拱对照</view>
+        <view class="chip {{split ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleSplit">
           {{split ? '装回 28 券' : '拆解 28 券'}}
         </view>
-        <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
+        <view class="chip {{anno ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleAnno">标注</view>
       </view>
     </block>
 
@@ -150,18 +150,19 @@
           class="band {{index <= band ? 'on' : ''}}"
           wx:for="{{bands}}" wx:key="label"
           style="flex:{{item.w}}"
+          hover-class="pressed" aria-role="button"
           data-q="{{item.q}}" bindtap="onBand"
         >{{item.label}}</view>
       </view>
       <view class="views">
-        <view class="chip {{view === 'full' ? 'on' : ''}}" data-v="full" bindtap="onView">全景</view>
-        <view class="chip {{view === 'small' ? 'on' : ''}}" data-v="small" bindtap="onView">小拱</view>
-        <view class="chip {{anno ? 'on' : ''}}" bindtap="onToggleAnno">标注</view>
-        <view class="chip {{open ? 'on' : ''}}" bindtap="onToggleSpandrel">
+        <view class="chip {{view === 'full' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-v="full" bindtap="onView">全景</view>
+        <view class="chip {{view === 'small' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-v="small" bindtap="onView">小拱</view>
+        <view class="chip {{anno ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleAnno">标注</view>
+        <view class="chip {{open ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleSpandrel">
           {{open ? '敞肩拱' : '实肩拱'}}
         </view>
-        <view class="chip {{thrust ? 'on' : ''}}" bindtap="onToggleThrust">受力</view>
-        <view class="chip {{autoFlood ? 'on' : ''}}" bindtap="onToggleAuto">洪水过程</view>
+        <view class="chip {{thrust ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleThrust">受力</view>
+        <view class="chip {{autoFlood ? 'on' : ''}}" hover-class="pressed" aria-role="button" bindtap="onToggleAuto">洪水过程</view>
       </view>
       <view class="hint">
         拖动旋转，双指缩放。外侧两个小拱在 {{qOuter}} m³/s 开始过水，内侧两个要
@@ -178,12 +179,12 @@
     <view class="tour-head">
       <view class="tour-step">{{tourIdx + 1}} / {{tourTotal}}</view>
       <view class="tour-name">{{tourName}}</view>
-      <view class="tour-exit" bindtap="onTourExit">退出</view>
+      <view class="tour-exit" hover-class="pressed" aria-role="button" bindtap="onTourExit">退出</view>
     </view>
     <view class="tour-text">{{tourText}}</view>
     <view class="tour-btns">
-      <view class="tour-btn prev {{tourIdx === 0 ? 'off' : ''}}" bindtap="onTourPrev">上一步</view>
-      <view class="tour-btn main" bindtap="onTourNext">{{tourIdx + 1 === tourTotal ? '完成' : '下一步'}}</view>
+      <view class="tour-btn prev {{tourIdx === 0 ? 'off' : ''}}" hover-class="pressed" aria-role="button" bindtap="onTourPrev">上一步</view>
+      <view class="tour-btn main" hover-class="pressed" aria-role="button" bindtap="onTourNext">{{tourIdx + 1 === tourTotal ? '完成' : '下一步'}}</view>
     </view>
   </view>
 
@@ -193,12 +194,13 @@
   <view class="src" wx:if="{{srcOpen}}" style="top:{{topTitle}}px">
     <view class="src-head">
       <text class="src-title">尺寸、做法与出处</text>
-      <text class="src-close" bindtap="onToggleSrc">关闭</text>
+      <text class="src-close" aria-role="button" bindtap="onToggleSrc">关闭</text>
     </view>
     <view class="src-tabs">
       <view
         class="src-tab {{srcTab === t ? 'on' : ''}}"
         wx:for="{{srcTabs}}" wx:for-item="t" wx:key="*this"
+        hover-class="pressed" aria-role="button"
         data-t="{{t}}" bindtap="onSrcTab"
       >{{t}}</view>
     </view>
