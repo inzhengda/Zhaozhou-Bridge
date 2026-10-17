@@ -2207,14 +2207,22 @@ Page({
       if (n !== this.data.builtCount) d.builtCount = n
       if (changed) d.ringTicks = next
     } else {
+      // 洪水过程播放中把呈现流量回写滑块与档位尺：水面在脉冲，
+      // 读数卡、滑块、{{q}} 文本三处说的始终是同一个数，
+      // 尺的点亮跟着脉冲爬升而不是停在旧档
+      let qShown = this.data.q
+      if (this.data.autoFlood) {
+        qShown = Math.round(this.st.q)
+        if (qShown !== this.data.q) d.q = qShown
+      }
       // 此刻落在水量尺的第几档。档位界线就是那两个临界流量，
       // 和 BANDS 用同一对数，尺上和卡上的说法不会打架
-      const bd = this.bandsAt(this.data.q)
+      const bd = this.bandsAt(qShown)
       if (bd !== this.data.band) d.band = bd
 
       const ev = H.evaluate(this.st.q)
       const o = ev.open, s = ev.solid
-      d.readout = {
+      const ro = {
         h: o.h.toFixed(2),
         area: o.area.toFixed(0),
         v: o.v.toFixed(2),
@@ -2222,11 +2230,13 @@ Page({
         backwater: o.backwater.toFixed(2),
         pMax: o.pMax.toFixed(0)
       }
-      d.diff = {
+      if (JSON.stringify(ro) !== JSON.stringify(this.data.readout)) d.readout = ro
+      const df = {
         forcePct: s.force > 1 ? ((1 - o.force / s.force) * 100).toFixed(1) : '0.0',
         areaPct: s.area > 1 ? ((o.area / s.area - 1) * 100).toFixed(1) : '0.0',
         hDown: (s.h - o.h).toFixed(2)
       }
+      if (JSON.stringify(df) !== JSON.stringify(this.data.diff)) d.diff = df
       // 内、外两对小拱的券脚不一样高（6.05 / 3.91 —— 各自落在主拱拱背上，
       // 拱背越靠拱顶越高），所以是分级过水的：水先漫过外侧那对，
       // 再涨 2 m 才够着内侧那对。这一条比百分比直观
@@ -2252,7 +2262,7 @@ Page({
         d.sp = next
       }
     }
-    this.setData(d)
+    if (Object.keys(d).length) this.setData(d)
   },
 
   // ==================== 交互 ====================
