@@ -932,15 +932,20 @@ Page({
       if (i === 0 || rings[i - 1].t0 > t) mask |= 1
       if (i === N - 1 || rings[i + 1].t0 > t) mask |= 2
 
-      // 每道拱券整道出现：不逐段生长，只用一个短促的亮度脉冲标记"这道刚砌好"
+      // 每道拱整道出现：不逐段生长，起手从拱心 75% 缩放弹到 100%，0.3 秒到位
       const m = this.ringMesh(i, 1, mask)
       const opt = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint }
       if (qp < 1) {
-        const off = 1 - qp
+        const e = M.easeOutCubic(qp)
+        const s = 0.75 + 0.25 * e
+        const off = 1 - e
         opt.color = this.hiColor(B.C.arch, off * 0.55)
         opt.bright = 1 + 0.12 * off
+        const mat = M.m4Mul(M.m4Translate(0, 0, dz(i)), M.m4ScaleAt([0, B.CY, 0], s))
+        R.pushMesh(sc, m, mat, opt)
+      } else {
+        R.pushMeshT(sc, m, 0, 0, dz(i), opt)
       }
-      R.pushMeshT(sc, m, 0, 0, dz(i), opt)
     }
 
     if (ex > 0.25 && t > B.T.arch[0] + B.RING_DUR) {
