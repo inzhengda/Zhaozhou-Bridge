@@ -510,7 +510,7 @@ Page({
         const a = (i / nSeg) * Math.PI * 2
         pts.push([0.55 * Math.sin(a), 0.55 * Math.cos(a)])
       }
-      mesh.prismZ(m, pts, y0 + 0.0, y0 + 0.14, sz - 0.07, sz + 0.07, C.span)
+      mesh.prismZ(m, pts, sz - 0.07, sz + 0.07, C.span)
       parts.push(m)
     }
     // 合并成一个 mesh
@@ -932,24 +932,15 @@ Page({
       if (i === 0 || rings[i - 1].t0 > t) mask |= 1
       if (i === N - 1 || rings[i + 1].t0 > t) mask |= 2
 
-      const m = this.ringMesh(i, qp, mask)
+      // 每道拱券整道出现：不逐段生长，只用一个短促的亮度脉冲标记"这道刚砌好"
+      const m = this.ringMesh(i, 1, mask)
       const opt = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint }
       if (qp < 1) {
         const off = 1 - qp
-        opt.color = this.hiColor(B.C.arch, off * 0.75)
-        opt.bright = 1 + 0.14 * off
+        opt.color = this.hiColor(B.C.arch, off * 0.55)
+        opt.bright = 1 + 0.12 * off
       }
       R.pushMeshT(sc, m, 0, 0, dz(i), opt)
-
-      // 龙门石：砌到 87% 时从上方落进拱顶
-      if (qp > 0.87) {
-        const kp = clamp((qp - 0.87) / 0.13, 0, 1)
-        const ky = (1 - M.easeOutBack(kp)) * 3.2
-        R.pushMeshT(sc, this.keyMesh(i), 0, ky, dz(i), {
-          waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint,
-          bright: kp < 1 ? 1.2 : 1
-        })
-      }
     }
 
     if (ex > 0.25 && t > B.T.arch[0] + B.RING_DUR) {
