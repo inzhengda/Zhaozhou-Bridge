@@ -133,7 +133,7 @@ const SHOTS = [
   // 斜视角桥面特写：diag 里桥面西半段出现过一块浅色区域，放大定位
   { name: 'diag-deck', note: '斜视角桥面特写', detail: true, data: { mode: 'build', anno: false }, t: BUILT,
     cam: { yaw: 0.62, pitch: 0.10, zoom: 0.55, tx: -6, ty: 7.5, tz: 0 } },
-  { name: 'build-mid', note: '营造中 · 砌到第 14 道券', view: 'side', detail: true, data: { mode: 'build', anno: true }, t: 9.0 },
+  { name: 'build-mid', note: '营造中 · 砌到第 14 道券', view: 'side', detail: true, data: { mode: 'build', anno: true }, t: 5.5 },
   { name: 'build-flat', note: '坦拱对照', view: 'full', detail: true, data: { mode: 'build', flat: true, anno: true }, t: BUILT },
   // 拆解那一张必须转到侧向才看得见——券是沿桥宽摊开的，正面看几乎重合。
   // 这个机位抄的是 onToggleSplit 里那段动画的终点（index.js:2306）

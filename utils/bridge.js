@@ -158,16 +158,20 @@ const C = {
 // ================= 营造时序（秒）=================
 // 桥台 → 28 道拱券 + 护拱石 → 侧墙 → 小拱 → 桥面 → 栏板
 const T = {
-  base:  [0.0,  3.0],
-  arch:  [3.0, 13.4],
-  span:  [13.4, 16.2],
-  small: [16.2, 19.4],
-  deck:  [19.4, 21.6],
-  rail:  [21.6, 23.4]
+  base:  [0.0,  2.2],
+  arch:  [2.2,  8.8],
+  span:  [8.8, 10.8],
+  small: [10.8, 13.2],
+  deck:  [13.2, 14.9],
+  rail:  [14.9, 16.3]
 }
+// 节奏整体提速约 1/3（总时长 23.4 → 16.3s）：营造机位抬高到 45° 俯视之后，
+// 28 道拱 10.4s 的砌筑段等待感明显，单道券 2.4s 也拖。压缩到 1.6s 一道、
+// 错距由 (拱券段 − RING_DUR)/27 自动重算，其余各段等比收紧，
+// "台→券→墙→小拱→面→栏"的层次关系保持不变
 const TOTAL = T.rail[1]
 
-const RING_DUR = 2.4
+const RING_DUR = 1.6
 const RING_STAGGER = (T.arch[1] - T.arch[0] - RING_DUR) / (RING_N - 1)
 const KEY_FRAC = 0.14                            // 龙门石占半弧的比例
 
@@ -561,8 +565,12 @@ function deckSegments() {
     const xb = -DECK_HALF + 2 * DECK_HALF * ((k + 1) / n)
     const hw = halfWidth(xa) + 0.25                 // 桥面比拱券略宽，挑出一点檐
     const m = mesh.newMesh()
-    // 单元内的 x 分缝：1.2 m 均分，再并入压在单元里的墙条边界（含负半桥）
-    const cuts = [xa]
+    // 单元内的 x 分缝：1.2 m 均分，再并入压在单元里的墙条边界（含负半桥）。
+    // xb 必须在 cuts 里：下面的棱柱循环只铺 cuts[i] → cuts[i+1]，
+    // 少了 xb，每个单元从最后一条内部缝到右边界（约 1.15 m）就整块缺失
+    // ——桥面上 14 道贯通的口子，墙顶/拱背直接透上来。平视时缝是侧棱，
+    // 一条线看不出来；营造机位抬到 45° 俯视后就是满屏"透视眼"补丁
+    const cuts = [xa, xb]
     for (const b of WALL_CUTS) for (const s of [b, -b]) {
       if (s > xa + 0.01 && s < xb - 0.01 && !cuts.includes(s)) cuts.push(s)
     }
@@ -974,7 +982,11 @@ function buildScene() {
       id: 'haunch-' + i, group: 'haunch', kind: 'mesh',
       mesh: haunchMesh(sign), pivot: [sign * HALF_SPAN * 0.55, 3.2, 0],
       t0: t0, t1: t0 + 1.1,
-      inOffset: [0, 0, 0], mode: 'fade', color: C.haunch
+      inOffset: [0, 0, 0], mode: 'fade', color: C.haunch,
+      // 护拱石贴着拱背走、上缘顶着桥面底，两个邻面的真实深度都只差
+      // 0.2~0.3 m。给 −0.2（与桥面的 −0.35 差 0.15 档）：桥面皮肤啃不动
+      // 它的上缘，它也反咬不了脚下贴合的拱背和身旁的侧墙
+      dBias: -0.2
     })
   }
 
@@ -1018,7 +1030,12 @@ function buildScene() {
       pivot: [side * s.xc, s.spring + s.f * 0.5, 0],
       t0: t0, t1: t0 + (m1 - m0) * 0.7,
       inOffset: [0, 0, 7], mode: 'fly', color: C.small,
-      hideInSolid: true
+      hideInSolid: true,
+      // 比桥面少压 0.15：券背顶到桥面底只差一步。全同偏置（−0.35）时
+      // 券面会在洞口边缘反过来啃墙端面——墙与券背的真实深度只差
+      // 0.3 m 上下。差 0.15 档正好落在两侧交界缝（0.2~0.3 m）之间：
+      // 桥面不啃券顶，券面也啃不动洞口边缘
+      dBias: -0.2
     })
   }
 
@@ -1053,6 +1070,12 @@ function buildScene() {
       pivot: [0, deckTop(0), sign * (halfWidth(0) + 0.09)],
       t0: t0, t1: t0 + (r1 - r0) * 0.7,
       inOffset: [0, 4, 0], mode: 'drop', color: C.rail
+      // 比桥面再压 0.15：栏板立在桥面边上，望柱基脚埋进桥面 6 cm，
+      // 交界一排像素上桥面的平均深度（整格 1.2 m 的均值）总比栏板基脚
+      // 的真实深度远，基脚就被桥面啃出锯齿。−0.5 只在基脚 0.15 m 内
+      // 赢回排序；从桥对岸看过来，栏板内侧面与近侧桥面差着整条桥宽的
+      // 真实深度，偏置翻不动，不会反过来吃桥面
+      , dBias: -0.5
     })
   }
 
