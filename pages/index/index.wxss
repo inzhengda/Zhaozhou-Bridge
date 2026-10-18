@@ -144,6 +144,10 @@ page {
 .src-body {
   flex: 1;
   min-height: 0;
+  /* scroll-view 不吃父级的 overflow:hidden（iOS 原生层浮在 WebView 之上），
+     没有这行，左右 padding 会把盒子撑得比面板宽 56rpx，右缘顶出屏幕，
+     右栏文字和注释块整列被切——数据出处面板文字截断的根因就是它 */
+  box-sizing: border-box;
   padding: 16rpx 28rpx 28rpx;
 }
 
@@ -172,6 +176,9 @@ page {
 
 .src-v {
   flex: 1;
+  /* flex 项默认 min-width:auto，长文本（书名号、数字串）会把右栏撑出容器 */
+  min-width: 0;
+  word-break: break-word;
   font-size: 22rpx;
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.82);
@@ -222,17 +229,7 @@ page {
   color: rgba(43, 39, 35, 0.38);
 }
 
-.src-note {
-  margin-top: 26rpx;
-  padding: 16rpx 18rpx;
-  border-radius: 10rpx;
-  background: rgba(158, 132, 96, 0.13);
-  font-size: 19rpx;
-  line-height: 1.6;
-  color: rgba(43, 39, 35, 0.6);
-}
-
-/* ---------- 营造阶段卡 ---------- */
+ /* ---------- 营造阶段卡 ---------- */
 
 .phase {
   position: absolute;
@@ -492,3 +489,175 @@ page {
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.46);
 }
+
+/* ---------- 部位聚焦卡 ---------- */
+
+/* 点中部位后弹出的讲解卡，与阶段卡/读数卡同位互斥（WXML 里 !focus 控制）。
+   左侧一道朱红竖线标记"这是选中态"，和 .cmp 的强调写法一致 */
+.focus {
+  position: absolute;
+  left: 34rpx;
+  right: 34rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 14rpx;
+  background: rgba(252, 248, 240, 0.94);
+  border: 1rpx solid rgba(158, 132, 96, 0.34);
+  border-left: 5rpx solid #c4563a;
+  box-shadow: 0 6rpx 24rpx rgba(60, 46, 28, 0.13);
+}
+
+.focus-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.focus-name {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #8e3b26;
+  letter-spacing: 2rpx;
+}
+
+.focus-close {
+  font-size: 22rpx;
+  color: #8e3b26;
+  padding: 4rpx 12rpx;
+}
+
+.focus-l1 {
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  line-height: 1.45;
+  color: rgba(43, 39, 35, 0.8);
+}
+
+.focus-l2 {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  line-height: 1.45;
+  color: rgba(43, 39, 35, 0.6);
+}
+
+/* ---------- 说课导览 ---------- */
+
+/* 盖在底部控制台之上的讲稿卡。九步里每步的机位、模式、开关都由
+   applyTourStep 摆好，录屏时只需点"下一步"。上边一道朱红压边，
+   和普通控制台一眼区分开 */
+.tour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18rpx 30rpx calc(22rpx + env(safe-area-inset-bottom));
+  border-radius: 26rpx 26rpx 0 0;
+  border-top: 5rpx solid #c4563a;
+  background: rgba(252, 248, 240, 0.97);
+  box-shadow: 0 -6rpx 30rpx rgba(60, 46, 28, 0.18);
+}
+
+.tour-head {
+  display: flex;
+  align-items: center;
+}
+
+.tour-step {
+  flex-shrink: 0;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-variant-numeric: tabular-nums;
+  color: #fdf6ec;
+  background: #c4563a;
+}
+
+.tour-name {
+  flex: 1;
+  margin-left: 16rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #8e3b26;
+}
+
+.tour-exit {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: rgba(43, 39, 35, 0.55);
+  padding: 6rpx 12rpx;
+}
+
+.tour-text {
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: rgba(43, 39, 35, 0.78);
+}
+
+.tour-btns {
+  display: flex;
+  margin-top: 16rpx;
+}
+
+.tour-btn {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  font-size: 24rpx;
+  border-radius: 10rpx;
+  color: #8e3b26;
+  background: rgba(196, 86, 58, 0.13);
+}
+
+/* WXSS 拿不到 :last-child，右距只写在"上一步"这一枚上 */
+.tour-btn.prev {
+  margin-right: 14rpx;
+}
+
+.tour-btn.off {
+  opacity: 0.4;
+}
+
+.tour-btn.main {
+  color: #fdf6ec;
+  background: #c4563a;
+}
+
+/* ==================== 按压反馈与触控目标 ====================
+   view 原生 hover-class：按下补上 .pressed，0.12 s 过渡让按下和
+   回弹都看得见。触控高度同步抬到 28–40 px——教学场景老人小孩都在用，
+   误触比按钮走形更伤体验 */
+
+.src-btn, .tab, .btn, .chip, .band, .tour-btn, .tour-exit, .focus-close, .src-close, .src-tab {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.pressed {
+  transform: scale(0.95);
+  opacity: 0.82;
+}
+
+.src-btn { min-height: 56rpx; display: flex; align-items: center; }
+.tab { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
+.btn { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
+.chip { min-height: 64rpx; display: flex; align-items: center; justify-content: center; }
+.band { min-height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.tour-btn { min-height: 80rpx; display: flex; align-items: center; justify-content: center; }
+
+/* 考考你 */
+.quiz-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,.45); z-index: 98; }
+.quiz { position: fixed; left: 16rpx; right: 16rpx; z-index: 99; background: #141414; border: 1px solid #2a2a2a; border-radius: 12rpx; padding: 24rpx; max-height: 70vh; overflow-y: auto; }
+.quiz-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.quiz-title { font-size: 30rpx; font-weight: 600; color: #e8e8e8; }
+.quiz-close { font-size: 26rpx; color: #999; }
+.quiz-progress { font-size: 22rpx; color: #777; margin-bottom: 8rpx; }
+.quiz-q { font-size: 28rpx; color: #ddd; line-height: 1.5; margin-bottom: 16rpx; }
+.quiz-opts { display: flex; flex-direction: column; gap: 10rpx; }
+.quiz-opt { padding: 16rpx 20rpx; border: 1px solid #333; border-radius: 8rpx; font-size: 26rpx; color: #bbb; }
+.quiz-opt.right { border-color: #4a4; color: #6c6; background: rgba(68,170,68,.08); }
+.quiz-opt.wrong { border-color: #a44; color: #c66; background: rgba(170,68,68,.08); }
+.quiz-why { margin-top: 14rpx; padding: 14rpx; background: rgba(255,255,255,.04); border-radius: 6rpx; font-size: 24rpx; color: #99a; line-height: 1.6; }
+.quiz-next { margin-top: 16rpx; text-align: center; padding: 16rpx; border: 1px solid #556; border-radius: 8rpx; font-size: 28rpx; color: #ccd; }
+.quiz-done { font-size: 26rpx; color: #aab; line-height: 1.7; margin-bottom: 16rpx; }
+.quiz-restart { text-align: center; padding: 14rpx; border: 1px solid #456; border-radius: 8rpx; font-size: 26rpx; color: #bcd; }
+

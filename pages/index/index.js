@@ -14,6 +14,7 @@ const M = require('../../utils/mat4.js')
 const R = require('../../utils/renderer.js')
 const H = require('../../utils/hydro.js')
 const SRC = require('../../utils/sources.js')
+const QUIZ = require('./quiz-data.js')
 
 const PHASES = [
   {
@@ -85,7 +86,20 @@ const VIEWS = {
   under: { yaw: 0.10,  pitch: -0.030, zoom: 0.27, t: [0, 4.6, 0], name: '拱下' },
   // 小拱特写。视宽 11 m，一对小拱（11.60~19.41，宽 7.8 m）占掉七成画幅。
   // 再往下压就撞到最近距离 26 m 的下限，两个洞两头都会被切掉
-  small: { yaw: 0.20,  pitch: 0.03,  zoom: 0.15, t: [15.5, 5.6, 0], name: '小拱' }
+  // pitch 抬到 0.10：压平的视角看洞里只有一条缝，抬高一点才能读出洞的进深
+  small: { yaw: 0.20,  pitch: 0.10,  zoom: 0.15, t: [15.5, 6.0, 0], name: '小拱' },
+
+// 营造机位：建造模式的默认落点，高空斜俯看 28 道并列拱券。
+//
+// 正面平视时 28 道券前后重叠，画面上只剩最外一道券和侧墙，
+// "并列砌券"这个核心讲点完全看不出来。抬高俯角（pitch 0.75 ≈ 43°，
+// 取"俯视 45°"的观感但留一点立面）：拱弧的立面可见度 =
+// cos(pitch)·cos(yaw) ≈ 0.58，拱的弧线仍在；券沿桥宽方向的错层
+// 投影 9.6·sin(0.65) ≈ 5.8 m，加上高机位的近大远小，道道分得开。
+// yaw 0.65 沿用拆解机位验证过的区间（0.68~0.80 不穿树冠，
+// 略收一点让画面多带桥身）；zoom 0.45 视宽约 33 m，主拱段撑满画幅。
+// 目标压到 ty 3.0，拱背在画面中线上方，券层铺在下半幅。
+build: { yaw: 0.65, pitch: 0.75, zoom: 0.45, t: [0, 3.0, 0], name: '营造' }
 }
 
 const Q_MIN = 150
@@ -178,6 +192,130 @@ const WX = 52               // 水面半宽
 // 前襟还有水；同时四个预设里最靠边的「小拱」（机位在 x ≈ 23）也够得着，
 // 一碰就被夹住、镜头一跳。
 const ORBIT_X = 26
+
+// ==================== 部位拾取（点哪，看哪） ====================
+// 锚点是每个部位在屏幕上的"点击热点"，cam 是聚焦后的落点机位。
+// 数值全部取自 bridge.js 的几何，不写死——几何一改锚点跟着走。
+// 小拱、桥台左右对称各一枚，点哪一头飞哪一头。
+const PARTS = (function () {
+  const si = B.SMALL[0], so = B.SMALL[1]
+  const yIn = si.spring + si.f + 0.35
+  const yOut = so.spring + so.f + 0.35
+  const list = [
+    {
+      id: 'arch', name: '主拱',
+      l1: '净跨 37.02 m · 矢高 7.23 m · 矢跨比 1 : 5.12',
+      l2: '28 道拱券纵向并列，每道独立成拱、可单独抽换',
+      minT: B.T.arch[1],
+      hit: [0, 4.3, 0],
+      cam: { yaw: 0.10, pitch: -0.02, zoom: 0.30, tx: 0, ty: 4.4, tz: 0 }
+    },
+    {
+      id: 'rings', name: '28 道并列拱券',
+      l1: '每道券宽约 0.32 m，自两端拱脚对称砌向拱顶',
+      l2: '一道受损只换一道，整桥不致倾覆',
+      minT: B.T.arch[1],
+      hit: [0, 1.1, 4.4],
+      cam: { yaw: 0.95, pitch: 0.12, zoom: 0.38, tx: 0, ty: 3.6, tz: 0 }
+    },
+    {
+      id: 'deck', name: '桥面',
+      l1: '随拱势微拱，宽 9.0 m',
+      l2: '连同桥堍全长 64.4 m，可通车马',
+      minT: B.T.deck[1],
+      hit: [0, 9.3, 0],
+      cam: { yaw: 0.03, pitch: 0.05, zoom: 0.45, tx: 0, ty: 6.0, tz: 0 }
+    },
+    {
+      id: 'rail', name: '栏板望柱',
+      l1: '两侧石栏板，全桥分 22 间',
+      l2: '望柱与栏板一路排开，随桥势起伏',
+      minT: B.T.rail[1],
+      hit: [0, 10.0, 2.2],
+      cam: { yaw: 0.30, pitch: 0.10, zoom: 0.42, tx: 0, ty: 7.2, tz: 0 }
+    }
+  ]
+  for (let sg = -1; sg <= 1; sg += 2) {
+    list.push({
+      id: 'so' + sg, name: '敞肩小拱 · 外侧',
+      l1: '净跨 3.81 m，券脚就坐在主拱拱背上',
+      l2: '券脚低，洪水先从这里泄出（' + Q_OUTER + ' m³/s 起）',
+      minT: B.T.small[1],
+      hit: [sg * so.xc, yOut, 0],
+      cam: { yaw: 0.20, pitch: 0.10, zoom: 0.15, tx: sg * so.xc, ty: 6.0, tz: 0 }
+    })
+    list.push({
+      id: 'si' + sg, name: '敞肩小拱 · 内侧',
+      l1: '净跨 2.85 m，券脚比外侧那对高出约 2 m',
+      l2: '水涨到 ' + Q_INNER + ' m³/s 才够着券脚，洪峰时四孔齐泄',
+      minT: B.T.small[1],
+      hit: [sg * si.xc, yIn, 0],
+      cam: { yaw: 0.20, pitch: 0.10, zoom: 0.17, tx: sg * si.xc, ty: 6.2, tz: 0 }
+    })
+    list.push({
+      id: 'ab' + sg, name: '桥台与地基',
+      l1: '长 5 m 五层条石，直接坐在粗砂层上，未打桩',
+      l2: '拱脚的水平推力全靠两岸桥台与台后填土顶住',
+      minT: B.T.base[1],
+      hit: [sg * 21, 1.2, 0],
+      cam: { yaw: 0.16, pitch: 0.05, zoom: 0.33, tx: sg * 19.5, ty: 2.6, tz: 0 }
+    })
+  }
+  return list
+})()
+
+// ==================== 说课导览 ====================
+// 九步，一步一个知识点，相机与开关都替用户摆好——录屏时按"下一步"就行。
+// 每步的 setup 字段会写进 data；t / q / view / split 单独处理。
+const TOUR = [
+  {
+    name: '全桥 · 总起',
+    text: '现存最早的敞肩石拱桥。隋开皇至大业年间（595—605），匠师李春主持建成，连同桥堍全长 64.4 m。',
+    view: 'full', t: B.TOTAL, data: { mode: 'build' }
+  },
+  {
+    name: '坦拱之利',
+    text: '净跨 37.02 m，矢高 7.23 m，矢跨比约 1 : 5.12。同样的跨径改用半圆拱，矢高要 18.51 m——坦拱桥面才能近乎平地过河，车马上下省力。',
+    view: 'side', data: { mode: 'build', flat: true }
+  },
+  {
+    name: '敞肩小拱 · 分级过水',
+    text: '四个小拱的券脚就坐在主拱拱背上。洪水先漫过外侧两孔（' + Q_OUTER + ' m³/s 起），涨到 ' + Q_INNER + ' m³/s 内侧两孔也泄。',
+    view: 'small', q: Math.round((Q_OUTER + Q_INNER) / 2), data: { mode: 'flood' }
+  },
+  {
+    name: '28 道拱券并列',
+    text: '桥不是一整块拱，是 28 道独立拱券纵向并列砌成的，每道自成拱券——一道受损不致全桥倾覆。',
+    data: { mode: 'build' },
+    split: true
+  },
+  {
+    name: '横向联系',
+    text: '券石之间嵌腰铁咬住本券的券石，9 根铁拉杆横穿 28 券，护拱石两侧的勾石钩住最外一道。并列的券靠这三样连成一个整体。',
+    data: { mode: 'build' },
+    split: true
+  },
+  {
+    name: '受力路径',
+    text: '桥面荷载沿拱轴压向两脚，到拱脚只剩向外的水平推力，由两岸桥台与台后地基顶住——河心不立桥墩，桥却千年不塌。',
+    view: 'full', data: { mode: 'build', thrust: true }
+  },
+  {
+    name: '泄洪 · 小拱分洪',
+    text: '水位漫过外侧券脚，两孔先泄。敞肩之利都是实算值：过水断面增大、冲击力与上游壅水降低，读数卡上的数随水量变。',
+    view: 'full', q: Math.round((Q_OUTER + Q_INNER) / 2), data: { mode: 'flood' }
+  },
+  {
+    name: '洪峰 · 四孔全开',
+    text: '洪峰时水位逼到 6.9 m，四孔齐泄，减杀水势、减轻桥身侧压，主拱洞仍保有断面行洪。',
+    view: 'full', q: 1200, data: { mode: 'flood' }
+  },
+  {
+    name: '收束 · 地位',
+    text: '1961 年列入第一批全国重点文物保护单位；1991 年被美国土木工程师学会选定为「国际土木工程历史古迹」（第 12 处）。',
+    view: 'full', data: { mode: 'build' }
+  }
+]
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v) }
 
@@ -282,15 +420,23 @@ Page({
     },
     thrust: false,        // 受力：把桥面荷载沿拱轴传到两岸桥台的路径画出来
     sec: false,           // 剖面图。开的时候 3D 上的标注一概让位
-    // 剖面图里翻的是哪一张：'long' 纵剖面（沿桥长剖开）、'cross' 横剖面
-    // （在拱顶横着切开）。默认仍是纵剖面，按钮文案和沿用习惯都不动
+    // 剖面图里翻的是哪一张：'long' 纵剖面、'cross' 横剖面，外加
+    // 'area' 过水断面、'rings' 拱券分解、'span' 敞肩对照、'found' 桥台基础。
+    // 默认仍是纵剖面，按钮文案和沿用习惯都不动
     secTab: 'long',
+    // 部位聚焦：focus 是信息卡内容，focusId 用于高亮圈与去重
+    focus: null,
+    focusId: null,
+    // 说课导览：null 关闭，0..8 是当前步
+    tour: null, tourIdx: 0, tourTotal: TOUR.length, tourName: '', tourText: '',
     // 尺寸数据的出处，静态不变量，见 utils/sources.js
     sources: SRC.GROUPS,
     annals: SRC.ANNALS,
     srcTabs: SRC.TABS,
     srcTab: SRC.TABS[0],
     srcOpen: false,
+    quizOpen: false, quizIdx: 0, quizPick: null, quizDone: false,
+    QUIZ: QUIZ,
     // 顶部安全区，onLoad 里按状态栏 + 胶囊按钮量出来（px）。见 measureTop
     topTitle: 64, topBtn: 120, topCard: 152, topCmp: 250
   },
@@ -321,6 +467,7 @@ Page({
 
   onLoad() {
     this.st = { t: 0, q: Q_DEF }
+    this.animT = 0      // 泄洪档位动画的相位钟：波线、流线、涟漪共用
     // 顶部四层的落位。层级之间用固定间距，改字号时才不用一处处重算：
     // 抬头（含副题）≈ 56 px、右下角那枚「数据出处」≈ 26 px
     const top = this.measureTop()
@@ -330,8 +477,9 @@ Page({
       topCard: top + 88,     // 营造阶段卡 / 泄洪读数卡
       topCmp: top + 180      // 敞肩对比卡（只在泄洪模式出现，压在读数卡之下）
     })
-    // 开画就落在「全景」机位上，和 VIEWS.full 保持一致
-    const v0 = VIEWS.full
+    // 开画就是建造模式，落在「营造」机位上，和 VIEWS.build 保持一致：
+    // 高空斜俯看 28 道并列拱券，层次分明；正面平视时它们前后重叠
+    const v0 = VIEWS.build
     this.cam = {
       yaw: v0.yaw, pitch: v0.pitch, zoom: v0.zoom,
       tx: v0.t[0], ty: v0.t[1], tz: v0.t[2]
@@ -371,7 +519,8 @@ Page({
 
       // 场景只搭一次，之后每帧只做投影
       this.bs = B.buildScene()
-      this.static = { terrain: this.bs.terrain }
+      this.static = { terrain: this.bs.terrain, scenery: this.bs.scenery }
+      this.cartMesh = this.buildCartMesh()
 
       this.initParticles()
       this._ready = true
@@ -393,10 +542,46 @@ Page({
 
   // ==================== 主循环 ====================
 
+
+  /** 独轮/双轮推车：平台 + 两个轮 + 货箱，建模在 x=0 处，跑起来靠 pushMeshT 平移 */
+  buildCartMesh() {
+    const { slabMesh, mesh, C } = B
+    const y0 = B.deckTop(0)
+    const parts = []
+    // 平台 3.0 x 0.25 x 1.8
+    parts.push(slabMesh(-1.5, 1.5, y0 + 0.55, y0 + 0.80, -0.9, 0.9, C.rail))
+    // 货箱 2.0 x 0.9 x 1.2
+    parts.push(slabMesh(-1.0, 1.0, y0 + 0.80, y0 + 1.70, -0.6, 0.6, C.span))
+    // 两轮：薄棱柱当圆轮用（简化，半径 0.55）
+    for (const sz of [-1.0, 1.0]) {
+      const m = mesh.newMesh()
+      const pts = []
+      const nSeg = 10
+      for (let i = 0; i < nSeg; i++) {
+        const a = (i / nSeg) * Math.PI * 2
+        pts.push([0.55 * Math.sin(a), 0.55 * Math.cos(a)])
+      }
+      mesh.prismZ(m, pts, sz - 0.07, sz + 0.07, C.span)
+      parts.push(m)
+    }
+    // 合并成一个 mesh
+    const cart = mesh.newMesh()
+    for (const m of parts) {
+      const offset = cart.pos.length / 3
+      cart.pos.push(...m.pos)
+      for (const f of m.faces) cart.faces.push({ ...f, i: f.i + offset })
+    }
+    return cart
+  },
+
+  // 马车动载状态
+  cartX: 0, cartDir: 1, cartMesh: null,
+
   tick(ts) {
     if (!this.running || !this._ready) return
     const dt = this.last ? Math.min(0.1, (ts - this.last) / 1000) : 0.016
     this.last = ts
+    this.animT += dt
 
     if (this.data.mode === 'build') {
       if (this.data.playing) {
@@ -412,6 +597,12 @@ Page({
       const u = (this.floodT % 1 + 1) % 1
       const pulse = Math.pow(Math.sin(Math.PI * u), 1.7)
       this.st.q = Q_MIN + (Q_MAX - Q_MIN) * pulse
+    } else if (this.st.q !== this.data.q) {
+      // 水位呈现值向滑块目标指数逼近：点档位、拖滑块时水面是涨落过去的，
+      // 不是瞬移；读数卡也读呈现值，数字才和画面里的水对得上
+      const k = 1 - Math.exp(-dt / 0.35)
+      const diff = this.data.q - this.st.q
+      this.st.q += Math.abs(diff) < 1 ? diff : diff * k
     }
 
     // 拆解程度缓慢跟随开关，散开与并拢都有个过程，看得清券是怎么分开的
@@ -422,6 +613,23 @@ Page({
       if (Math.abs(this.ex - want) < 0.004) this.ex = want
     }
 
+    // 马车动载：受力模式下独轮来回走，力跟着走
+    if (this.data.thrust && !this.data.sec && !this.data.focus) {
+      this.cartX += this.cartDir * dt * 3.2
+      if (this.cartX > 14) { this.cartX = 14; this.cartDir = -1 }
+      if (this.cartX < -14) { this.cartX = -14; this.cartDir = 1 }
+    }
+    // 松手惯性：手势里采到的角速度按指数衰减继续带一段，快甩多转、慢拖不飘
+    if (this.spin && !this.anim) {
+      const c = this.cam
+      c.yaw += this.spin.vyaw * dt
+      c.pitch = clamp(c.pitch + this.spin.vpitch * dt, -0.45, 0.95)
+      this.clampOrbit()
+      const decay = Math.exp(-dt / 0.4)
+      this.spin.vyaw *= decay
+      this.spin.vpitch *= decay
+      if (Math.abs(this.spin.vyaw) < 0.02 && Math.abs(this.spin.vpitch) < 0.02) this.spin = null
+    }
     this.stepCameraAnim(dt)
     this.stepDetail()
     this.draw(dt)
@@ -441,7 +649,7 @@ Page({
     if (!B.setDetail(want)) return
     this.detailOn = want
     this.bs = B.buildScene()
-    this.static = { terrain: this.bs.terrain }
+    this.static = { terrain: this.bs.terrain, scenery: this.bs.scenery }
     this.rc = []            // 拱券缓存的网格是按旧分段建的，全部作废
     this.rcN = 0
   },
@@ -494,7 +702,9 @@ Page({
 
   camera() {
     const c = this.cam
-    const d = this.camDist(c.zoom)
+    // d 允许镜头表显式给定：近景机位（树冠这类）不受全景视锥的
+    // camDist 约束，否则"特写"实际在 190 m 外拍，什么都看不清
+    const d = this.cam.d != null ? this.cam.d : this.camDist(c.zoom)
     const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch)
     const target = [c.tx, c.ty, c.tz]
     const eye = [
@@ -503,6 +713,28 @@ Page({
       target[2] + d * cp * Math.cos(c.yaw)
     ]
     if (eye[1] < 1.2) eye[1] = 1.2
+    // 视线不许钻进地形：长焦侧后机位就算眼睛在岸顶上方，视线朝
+    // 目标下俯，还是会在两岸陡坡段扎进地里——画面被一条地平带
+    // 拦腰截断，桥"消失"。沿视线采样比高，视线高度对 eye[1] 是
+    // 线性的，亏空除以各自的 u 取最大，一次解出精确抬升量
+    let lift = 0
+    // 目标本身贴地/入土时（如对岸坡近景），视线近段必然贴坡，按全段
+    // 采样会解出天文数字的抬升把构图炸掉——这类目标近段直接跳过。
+    // 解不封顶：极端手势（贴水仰视远望）穿堤亏空本来就要几十米，
+    // 抬到位才能保住"视线永不穿地"这条硬约束，宁可视野抬高也不让
+    // 一条土坎拦腰截断桥
+    const grounded = target[1] < B.groundY(Math.abs(target[0])) + 2
+    for (let s = 1; s <= 48; s++) {
+      const u = s / 48
+      if (grounded && u < 0.3) continue
+      const x = target[0] + (eye[0] - target[0]) * u
+      const y = target[1] + (eye[1] - target[1]) * u
+      // 余量 2.5 m：贴着坡顶切过去桥会藏进岸坡的视线阴影里，
+      // 高一点变成"越顶斜视"，河谷里的桥面和拱上部都露出来
+      const need = (B.groundY(Math.abs(x)) + 2.5 - y) / u
+      if (need > lift) lift = need
+    }
+    if (lift > 0) eye[1] += lift
     return { eye, target, w: this.cw, h: this.ch, fov: 38 }
   },
 
@@ -537,7 +769,7 @@ Page({
 
     const flood = this.data.mode === 'flood'
     const t = flood ? B.TOTAL : this.st.t
-    const q = flood ? this.data.q : 0
+    const q = flood ? this.st.q : 0
 
     let ev = null
     if (flood) ev = H.evaluate(q)
@@ -548,8 +780,21 @@ Page({
 
     // ---- 静态地形 ----
     R.pushMesh(sc, this.static.terrain, null, {
-      waterY: waterY, waterDepth: waterDepth
+      waterY: waterY, waterDepth: waterDepth,
+      // 地形是开放的高度场：两岸的陡坡格几乎立起来，法线朝水平方向，
+      // 从岸顶那侧看是"背面"，会被剔除——桥台周围就漏出天空，桥台
+      // 像悬在雾里。地形不做背面剔除，多画的只是几十个背格
+      noCull: true,
+      // seam：顺序 AA 的边缘合成只有 75% 覆盖，大平面上就是满屏格线。
+      // 地形和水面这两片"大平面"必须同色描边压缝；桥体面小、色彩碎，
+      // 缝陷在纹理里看不见，就不花这笔描边开销了
+      seam: true
     })
+    // 岸上景物：官道、纤道、树、村舍，跟着地形一起受水位浸染
+    const scN = this.static.scenery
+    R.pushMesh(sc, scN.road, null, { waterY: waterY, waterDepth: waterDepth })
+    R.pushMesh(sc, scN.greens, null, { waterY: waterY, waterDepth: waterDepth })
+    R.pushMesh(sc, scN.houses, null, { waterY: waterY, waterDepth: waterDepth })
     // 压强热力色只在泄洪时上身。营造时河浅、桥台埋在砂里，
     // 埋深处的 p = ρgh 会把桥台染成通红，看着像出了错
     const wo = { waterY: waterY, waterDepth: waterDepth, waterTint: flood }
@@ -559,17 +804,38 @@ Page({
     this._ex = this.ex
     this.drawPieces(sc, t, solid, wo)
 
+    // ---- 马车（受力模式下动载来回走）----
+    if (this.cartMesh && this.data.thrust && !this.data.sec && !this.data.focus && !flood) {
+      const dy = B.deckTop(this.cartX) - B.deckTop(0)
+      // 推车轮底贴着桥面，和桥面挂同一排序偏置，陡视角下轮子不会被桥面啃掉
+      R.pushMeshT(sc, this.cartMesh, this.cartX, dy, 0, { ...wo, dBias: -0.35 })
+    }
+
     // ---- 坦拱对照 ----
     // 拆解状态下 28 道券已经摊开，再叠一道半圆拱虚影就太乱，所以不画
     if (this.data.flat && this._ex < 0.02) this.drawFlatCompare(sc, t, cam)
 
     // ---- 水面 ----
     const flow = flood ? ev.open.v : 0.5
-    this.drawWater(sc, waterY, t, flood, wetHalf(waterY), cam.eye[2], d)
+    const bd = flood ? this.data.band : 0
+    // 波幅随档位走：枯水近于静水，外侧两孔起浪，四孔全开再抬高；
+    // 洪峰（水位 6.2 m 以上）再乘一档——"水大浪高"不用讲，看着就是
+    const peak = flood && waterY > 6.2
+    const amp = flood ? 0.9 + bd * 0.45 + (peak ? 0.35 : 0) : 1
+    this.drawWater(sc, waterY, this.animT, flood, wetHalf(waterY), cam.eye[2], d, amp)
+    this.drawReflections(sc, waterY, flood)
 
     // ---- 水流粒子 & 水花 ----
     this.drawParticles(sc, dt, waterY, flood, flow, ev)
     this.drawFoam(sc, waterY, flood, flow)
+
+    // ---- 洞内流线与出口涟漪 ----
+    // 数量与组数随档位走（对照 HTML 教学页同一套语言）：枯水主拱一条，
+    // 外侧两孔起加小拱流线与出口涟漪，四孔全开加密、洪峰加桥台激荡
+    if (flood) {
+      this.drawStreamlines(sc, waterY, ev, this.animT, bd)
+      this.drawRipples(sc, waterY, this.animT, bd)
+    }
 
     // ---- 水压箭头 ----
     // 两种箭头一次只画一种：开了「受力」就把水压箭头让出去。两套叠在
@@ -587,7 +853,9 @@ Page({
       this.drawSection(ctx)
     } else {
       if (this.data.anno) this.drawAnnotations(ctx, sc, t, flood, waterY, ev)
-      if (flood && this.data.thrust) this.drawForce(ctx, sc)
+      // 受力不再绑定泄洪模式：营造模式下讲"重量怎么走到两岸"同样成立
+      if (this.data.thrust) this.drawForce(ctx, sc)
+      if (this.data.focusId) this.drawFocusRing(ctx)
       this.drawRingStrip(ctx)
     }
   },
@@ -610,7 +878,7 @@ Page({
 
       const mesh = (solid && p.alt) ? p.alt : p.mesh
       const e = M.easeOutCubic(pr)
-      const wp = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint }
+      const wp = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint, dBias: p.dBias }
 
       if (pr < 1) {
         // 未落位：从引导位置飞入，尚未抹灰所以偏暖色
@@ -716,23 +984,19 @@ Page({
       if (i === 0 || rings[i - 1].t0 > t) mask |= 1
       if (i === N - 1 || rings[i + 1].t0 > t) mask |= 2
 
-      const m = this.ringMesh(i, qp, mask)
+      // 每道拱整道出现：不逐段生长，起手从拱心 75% 缩放弹到 100%，0.3 秒到位
+      const m = this.ringMesh(i, 1, mask)
       const opt = { waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint }
       if (qp < 1) {
-        const off = 1 - qp
-        opt.color = this.hiColor(B.C.arch, off * 0.75)
-        opt.bright = 1 + 0.14 * off
-      }
-      R.pushMeshT(sc, m, 0, 0, dz(i), opt)
-
-      // 龙门石：砌到 87% 时从上方落进拱顶
-      if (qp > 0.87) {
-        const kp = clamp((qp - 0.87) / 0.13, 0, 1)
-        const ky = (1 - M.easeOutBack(kp)) * 3.2
-        R.pushMeshT(sc, this.keyMesh(i), 0, ky, dz(i), {
-          waterY: wo.waterY, waterDepth: wo.waterDepth, waterTint: wo.waterTint,
-          bright: kp < 1 ? 1.2 : 1
-        })
+        const e = M.easeOutCubic(qp)
+        const s = 0.75 + 0.25 * e
+        const off = 1 - e
+        opt.color = this.hiColor(B.C.arch, off * 0.55)
+        opt.bright = 1 + 0.12 * off
+        const mat = M.m4Mul(M.m4Translate(0, 0, dz(i)), M.m4ScaleAt([0, B.CY, 0], s))
+        R.pushMesh(sc, m, mat, opt)
+      } else {
+        R.pushMeshT(sc, m, 0, 0, dz(i), opt)
       }
     }
 
@@ -754,7 +1018,7 @@ Page({
    * 看着像是券与券之间被拉杆拉着——那是铁拉杆的活儿，画错位了。
    *
    * 尺寸比实物放大：真腰铁长约 20 cm，在这个比例下不到 1.5 px，照实画画不出来。
-   * 资料页「腰铁」一条已注明本模型只画位置、不画真实尺寸。
+   * 资料页「腰铁」一条已注明只画位置、不画真实尺寸。
    */
   drawWaistIron(sc, dz) {
     const N = B.RING_N
@@ -844,7 +1108,7 @@ Page({
    *
    * 只画在最外两道券上，跟着它们一起摊开。石条本长 1.2 m，摊开的缝里
    * 塞不下，这里只画露出券面的钩头那一段；5 cm 的钩在这个比例下是 0.3 px，
-   * 也照放大画。资料页「勾石」一条已注明本模型只画位置。
+   * 也照放大画。资料页「勾石」一条已注明只画位置。
    */
   drawGouShi(sc, dz) {
     const N = B.RING_N
@@ -922,7 +1186,7 @@ Page({
    * 所以水面的尽头是化进天色里的，不会在画面上留一条生硬的地平线。
    * 桥附近仍然保持密分段，画家算法在那里才排得对。
    */
-  drawWater(sc, level, t, flood, halfW, camZ, dist) {
+  drawWater(sc, level, t, flood, halfW, camZ, dist, amp) {
     const zNear = camZ + dist * 0.42
     const zFar = camZ - dist * 2.5
     // 分格表和地形**必须用同一张**（B.TERRAIN_ZS / B.TERRAIN_XS）。
@@ -951,17 +1215,20 @@ Page({
         const z0 = zs[b], z1 = zs[b + 1]
         const cx = (x0 + x1) / 2
 
-        const w0 = this.wave(x0, z0, t, speed)
-        const w1 = this.wave(x1, z0, t, speed)
-        const w2 = this.wave(x1, z1, t, speed)
-        const w3 = this.wave(x0, z1, t, speed)
+        const w0 = this.wave(x0, z0, t, speed, amp)
+        const w1 = this.wave(x1, z0, t, speed, amp)
+        const w2 = this.wave(x1, z1, t, speed, amp)
+        const w3 = this.wave(x0, z1, t, speed, amp)
         // 壅水按 z 的**角点值**算，同一行相邻两格共用一条边的两个角，
         // 值必然相同，水面严丝合缝地拼在一起（详见 backwater 的注释）
         const ya = level + backwater(z0, flood)
         const yb = level + backwater(z1, flood)
-        // 近岸水浅，透一点让河床露出来；深水处更实
+        // 近岸水浅，透一点让河床露出来；深水处更实。
         const depth = Math.max(0, level - B.groundY(Math.abs(cx)))
-        const alpha = 0.46 + 0.26 * Math.min(1, depth / 6)
+        const alpha = 0.44 + 0.20 * Math.min(1, depth / 9)
+        // 坡度放缓（/9）、对比收窄（±0.10）：相邻格的 alpha 台阶压到
+        // 0.02 上下，格子拼缝就退到可视阈以下；深水饱和值也从 0.72
+        // 降到 0.64，深浅水域的交界不再是一刀切的硬边
         // 这里刻意不按格心给亮度：水面每格是一个平涂的四边形，
         // 格心亮度一旦随位置变，远格与近格之间就会裂出横向的硬条带。
         // 水面质感交给四个角的 wave() 起伏和随深度的透明度。
@@ -973,11 +1240,67 @@ Page({
     }
   },
 
-  wave(x, z, t, speed) {
+  wave(x, z, t, speed, amp) {
+    const A = amp === undefined ? 1 : amp
     const u = t * speed
-    return 0.09 * Math.sin(x * 0.34 + u * 1.7) +
-           0.06 * Math.sin(z * 0.21 - u * 2.2) +
-           0.04 * Math.sin((x + z) * 0.55 + u * 3.1)
+    return A * (0.09 * Math.sin(x * 0.34 + u * 1.7) +
+                0.06 * Math.sin(z * 0.21 - u * 2.2) +
+                0.04 * Math.sin((x + z) * 0.55 + u * 3.1))
+  },
+
+  /**
+   * 主拱倒影 + 顺流微光。近 140 m 的河面占了全景画幅的大半，一块匀色
+   * 半透明平面会把空间感全部抹掉；倒影（拱与倒影合成满月，这座桥最
+   * 出名的水景）和两条随浪起伏的亮带给水面装上「内容」。
+   * 倒影往相机方向拉伸：低角度看水面，像落在桥脚前方的水面上，
+   * 拱顶处拉得最长——0.9 倍拱高，正好和拱洞拼成一轮「满月」。
+   */
+  drawReflections(sc, waterY, flood) {
+    if (waterY < -1.2) return
+    const sp = flood ? 1 : 0.35
+    const N = 14
+    // 主拱倒影：近缘贴水面线，远缘按内弧高度向镜头方向拉伸，分 5 段
+    // 画。整条带一个 alpha 会把倒影印成一整块边界生硬的深色矩形；
+    // 真实倒影是离桥越近越浓、往镜头方向融进水色的，所以按远缘分段
+    // 衰减，段与段只差 0.04，拼起来是一道渐变的影
+    const zAt = (i, u) => {
+      const x = -B.HALF_SPAN + (2 * B.HALF_SPAN * i) / N
+      const arch = B.archIntrados(x)
+      // 近缘从 z 5.3 起步：贴着桥脚画会被桥身自己挡住（低角度掠射），
+      // 前移到桥前开阔水面，"拱+倒影"的画面才立得起来
+      return [x, 5.3 + 0.9 * Math.max(0.3, arch - waterY) * u]
+    }
+    const K = 5
+    for (let s = 0; s < K; s++) {
+      const u0 = s / K, u1 = (s + 1) / K
+      const band = []
+      for (let i = 0; i <= N; i++) {
+        const p = zAt(i, u0)
+        band.push([p[0], waterY - 0.02 + this.wave(p[0], p[1], this.animT, sp) * 0.55, p[1]])
+      }
+      for (let i = N; i >= 0; i--) {
+        const p = zAt(i, u1)
+        band.push([p[0], waterY - 0.02 + this.wave(p[0], p[1], this.animT, sp) * 0.55, p[1]])
+      }
+      R.pushPoly(sc, band, [34, 52, 56],
+        { alpha: 0.24 * (1 - 0.78 * (u0 + u1) / 2), noCull: true, dBias: -3 })
+    }
+
+    // 顺流的两条微光：水面的方向感全靠它，没有它水面就是一块塑料板
+    for (let sg = -1; sg <= 1; sg += 2) {
+      const gx = sg * 5.5
+      const band = []
+      for (let i = 0; i <= 8; i++) {
+        const z = -70 + 140 * i / 8
+        band.push([gx - 0.8, waterY + 0.02 + this.wave(gx, z, this.animT, sp) * 0.8, z])
+      }
+      for (let i = 8; i >= 0; i--) {
+        const z = -70 + 140 * i / 8
+        band.push([gx + 0.8 + sg * 0.5,
+          waterY + 0.05 + this.wave(gx + 1.6, z, this.animT, sp) * 0.8, z])
+      }
+      R.pushPoly(sc, band, [210, 222, 214], { alpha: 0.17, noCull: true, dBias: -2 })
+    }
   },
 
   // ==================== 粒子 / 水花 ====================
@@ -1042,6 +1365,126 @@ Page({
       R.pushSprite(sc, x, y, z, 0.45 + q * 0.7,
         240, 248, 252, 0.16 + 0.34 * inten)
     }
+  },
+
+  // ==================== 泄洪档位动画 ====================
+
+  /**
+   * 洞内流线：主拱洞与小拱洞里顺着水流方向的短划线 + 一枚箭头。
+   *
+   * 线的数量随档位加密——枯水主拱一条，外侧两孔起三条，四孔全开五条；
+   * 相位随洞内流速推进，"线多了、跑快了"就是洪水的进程，不用读数。
+   *
+   * 不用 canvas 的 setLineDash：这些线要走画家算法的 3D 队列，在桥洞里
+   * 才会被桥身正确遮挡。所以把线切成短段，段位随时间向下游平移——
+   * 段长 1.05 m、周期 1.7 m，相位取模，速度跟洞内流速 v 走。
+   */
+  drawStreamlines(sc, level, ev, t, band) {
+    const v = ev.open.v
+    const inten = clamp(0.42 + v * 0.10, 0.42, 0.85)
+    const xs = band >= 2 ? [-12, -6, 0, 6, 12] : band >= 1 ? [-9, 0, 9] : [0]
+    for (let i = 0; i < xs.length; i++) {
+      const x = xs[i]
+      const bands = wetBands(x, level)
+      if (!bands.length) continue
+      const y = Math.min(level - 0.35, bands[0][1] - 0.22)
+      if (y <= bands[0][0] + 0.12) continue
+      this.dashLine(sc, x, y, -9.5, 9.5, t, v, inten)
+    }
+    // 小拱洞：外侧那对（band ≥ 1）与内侧那对（band = 2）
+    for (let i = 0; i < B.SMALL.length; i++) {
+      const s = B.SMALL[i]
+      const open = s.key === 'outer' ? band >= 1 : band >= 2
+      if (!open || level <= s.spring + 0.15) continue
+      const top = B.smallIntrados(s, s.xc)
+      const bot = B.haunchTop(s.xc)
+      const y = Math.min(level - 0.30, top - 0.20)
+      if (y <= bot + 0.12) continue
+      for (let sg = -1; sg <= 1; sg += 2) {
+        this.dashLine(sc, sg * s.xc, y, -3.4, 3.4, t, v, inten)
+      }
+    }
+  },
+
+  /** 一条沿 z 的 dash 流线 + 中腰一枚指向下游（-z）的箭头 */
+  dashLine(sc, x, y, z0, z1, t, v, inten) {
+    const per = 1.7, seg = 1.05
+    let start = z1 - ((t * (1.2 + v * 0.55)) % per + per) % per
+    while (start > z0) {
+      const a = Math.max(z0, start - seg)
+      if (start < z1) {
+        R.pushSegment(sc, x, y, start, x, y, a, 0.34, 236, 246, 252, 0.62 * inten)
+      }
+      start -= per
+    }
+    const zm = (z0 + z1) / 2
+    R.pushTri(sc,
+      [x, y, zm - 0.85], [x, y + 0.26, zm + 0.30], [x, y - 0.26, zm + 0.30],
+      236, 246, 252, Math.min(1, 0.55 * inten + 0.15))
+  },
+
+  /**
+   * 出口涟漪：水从洞口涌出，在水面上留下一圈圈扩散的环。
+   * 三圈错相、透明度随半径衰减；环抬到水面之上 5 cm——压在水面以下
+   * 会被半透明的水面盖掉一半。组数随档位走：外侧两孔起主拱洞与外侧
+   * 小拱各出涟漪，四孔全开加内侧小拱，洪峰（水位 6.2 m 以上）再补
+   * 桥台迎水面的激荡。
+   */
+  drawRipples(sc, level, t, band) {
+    if (band < 1) return
+    const spots = []
+    for (let sg = -1; sg <= 1; sg += 2) {
+      spots.push([sg * B.SMALL[1].xc, 5.6])   // 外侧小拱出口
+      spots.push([sg * 11, 5.6])              // 主拱洞出口涡区
+    }
+    if (band >= 2) {
+      for (let sg = -1; sg <= 1; sg += 2) spots.push([sg * B.SMALL[0].xc, 5.6])
+    }
+    const peak = level > 6.2
+    if (peak) {
+      for (let sg = -1; sg <= 1; sg += 2) {
+        spots.push([sg * 21.2, 6.3], [sg * 16.2, 6.3])   // 桥台迎水面激荡
+      }
+    }
+    for (let i = 0; i < spots.length; i++) {
+      for (let k = 0; k < 3; k++) {
+        const u = (t * (0.55 + (i % 3) * 0.05) + k / 3 + i * 0.17) % 1
+        const r = 0.45 + u * 2.3
+        const a = 0.36 * (1 - u) * (peak ? 1.15 : 1)
+        if (a < 0.03) continue
+        this.ring(sc, spots[i][0], level + 0.05, spots[i][1], r, r * 0.82, a)
+      }
+    }
+  },
+
+  /** 水面上的一圈涟漪：12 段细线围成椭圆（z 向压扁 0.82 顺流向拉长感） */
+  ring(sc, cx, cy, cz, rx, rz, alpha) {
+    const n = 12
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2
+      R.pushSegment(sc,
+        cx + rx * Math.cos(a0), cy, cz + rz * Math.sin(a0),
+        cx + rx * Math.cos(a1), cy, cz + rz * Math.sin(a1),
+        0.26, 242, 250, 255, alpha)
+    }
+  },
+
+  /** 聚焦部位的高亮圈：锚点投影处两道脉冲圆环，朱红，2D 层压在最后 */
+  drawFocusRing(ctx) {
+    let part = null
+    for (let i = 0; i < PARTS.length; i++) {
+      if (PARTS[i].id === this.data.focusId) { part = PARTS[i]; break }
+    }
+    if (!part) return
+    const pr = R.project(this.scene, part.hit[0], part.hit[1], part.hit[2])
+    if (!pr) return
+    const pu = 0.5 + 0.5 * Math.sin(this.animT * 3.1)
+    ctx.strokeStyle = 'rgba(196,86,58,0.95)'
+    ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(pr[0], pr[1], 17 + 4 * pu, 0, Math.PI * 2); ctx.stroke()
+    ctx.strokeStyle = 'rgba(196,86,58,0.4)'
+    ctx.lineWidth = 1.5
+    ctx.beginPath(); ctx.arc(pr[0], pr[1], 26 + 5 * pu, 0, Math.PI * 2); ctx.stroke()
   },
 
   // ==================== 压力可视化 ====================
@@ -1112,7 +1555,7 @@ Page({
    * 拱脚外推的那两下，正是赵州桥为什么必须"两端牢牢扎在岸上"。
    *
    * 三组箭头的长短只表方向与先后，**不表力的比值**。真按比例画，
-   * 拱脚那一支要长到画外去，而且本模型也没有算过桥体自重下的真实推力，
+   * 拱脚那一支要长到画外去，而且这里也没有算桥体自重下的真实推力，
    * 不编这个数。画面里唯一给出的实数是最上面那行石方账，
    * 那是 bridge.js 按本题几何积出来的，有据可查。
    */
@@ -1147,6 +1590,18 @@ Page({
       }
     }
 
+
+    // 马车动载：荷载箭头跟着车走
+    const cx = this.cartX
+    if (cx !== 0 || this.cartDir !== 1) {
+      const cy = B.deckTop(cx)
+      const a = pr(cx, cy + 4.6, zf), b = pr(cx, cy + 0.7, zf)
+      if (a && b) {
+        this.arrow2(ctx, a, b, 3.2, 'rgba(220,80,40,0.95)')
+        const lx = pr(cx, cy + 5.3, zf)
+        if (lx) { ctx.fillStyle = 'rgba(220,80,40,0.95)'; ctx.fillText('活载', lx[0], lx[1]) }
+      }
+    }
     // 三、拱脚外推。尾巴钉在起拱点上，头收在离画幅边缘 14 px 处。
     // 长度不能写死：全景机位的视宽只有 46 m，起拱点（18.51 m）投影出来
     // 已经在屏幕的九成处，桥台外缘（23.5 m）本就在画外，
@@ -2555,14 +3010,22 @@ Page({
       if (n !== this.data.builtCount) d.builtCount = n
       if (changed) d.ringTicks = next
     } else {
+      // 洪水过程播放中把呈现流量回写滑块与档位尺：水面在脉冲，
+      // 读数卡、滑块、{{q}} 文本三处说的始终是同一个数，
+      // 尺的点亮跟着脉冲爬升而不是停在旧档
+      let qShown = this.data.q
+      if (this.data.autoFlood) {
+        qShown = Math.round(this.st.q)
+        if (qShown !== this.data.q) d.q = qShown
+      }
       // 此刻落在水量尺的第几档。档位界线就是那两个临界流量，
       // 和 BANDS 用同一对数，尺上和卡上的说法不会打架
-      const bd = this.bandsAt(this.data.q)
+      const bd = this.bandsAt(qShown)
       if (bd !== this.data.band) d.band = bd
 
-      const ev = H.evaluate(this.data.q)
+      const ev = H.evaluate(this.st.q)
       const o = ev.open, s = ev.solid
-      d.readout = {
+      const ro = {
         h: o.h.toFixed(2),
         area: o.area.toFixed(0),
         v: o.v.toFixed(2),
@@ -2570,11 +3033,13 @@ Page({
         backwater: o.backwater.toFixed(2),
         pMax: o.pMax.toFixed(0)
       }
-      d.diff = {
+      if (JSON.stringify(ro) !== JSON.stringify(this.data.readout)) d.readout = ro
+      const df = {
         forcePct: s.force > 1 ? ((1 - o.force / s.force) * 100).toFixed(1) : '0.0',
         areaPct: s.area > 1 ? ((o.area / s.area - 1) * 100).toFixed(1) : '0.0',
         hDown: (s.h - o.h).toFixed(2)
       }
+      if (JSON.stringify(df) !== JSON.stringify(this.data.diff)) d.diff = df
       // 内、外两对小拱不一样高（起拱线 6.05 / 3.91），所以是分级过水的：
       // 水先够着外侧那对，再涨一截才轮到内侧那对。这一条比百分比直观。
       //
@@ -2610,7 +3075,7 @@ Page({
         d.sp = next
       }
     }
-    this.setData(d)
+    if (Object.keys(d).length) this.setData(d)
   },
 
   // ==================== 交互 ====================
@@ -2621,6 +3086,11 @@ Page({
     // 认领。认领了就直接返回：这一下是点按钮，不是转桥
     if (this.data.sec && ts.length === 1 && this.hitSecTab(ts[0])) return
     this.anim = null
+    // 新手势接管：上一把的惯性停掉，速度采样归零重来
+    this.spin = null
+    this.vyaw = 0
+    this.vpitch = 0
+    this.moveAt = 0
     if (this.data.view !== 'free') this.setData({ view: 'free' })
     if (ts.length >= 2) {
       this.pinch0 = this.touchDist(ts)
@@ -2630,6 +3100,8 @@ Page({
       this.yaw0 = this.cam.yaw
       this.pitch0 = this.cam.pitch
       this.pinch0 = 0
+      // tap 判定：按下位置与时刻记下来，onTouchEnd 里没怎么动才算点
+      this.tap0 = { x: ts[0].x, y: ts[0].y, at: Date.now() }
     }
   },
 
@@ -2647,13 +3119,130 @@ Page({
     this.cam.yaw = this.yaw0 - dx * 0.006
     this.cam.pitch = clamp(this.pitch0 + dy * 0.005, -0.45, 0.95)
     this.clampOrbit()
+    // 采手指角速度给惯性用：单帧差分噪声大，掺三成上一帧的值抹平
+    const now = Date.now()
+    if (this.moveAt) {
+      const mdt = Math.max(0.008, (now - this.moveAt) / 1000)
+      const ivy = (-(ts[0].x - this.lastX) * 0.006) / mdt
+      const ivp = ((ts[0].y - this.lastY) * 0.005) / mdt
+      this.vyaw = 0.7 * this.vyaw + 0.3 * ivy
+      this.vpitch = 0.7 * this.vpitch + 0.3 * ivp
+    }
+    this.lastX = ts[0].x
+    this.lastY = ts[0].y
+    this.moveAt = now
   },
 
-  onTouchEnd() { this.pt = null; this.pinch0 = 0 },
+  onTouchEnd(e) {
+    // 轻点 = 没怎么移动、也没按多久：落到部位锚点附近就聚焦，点空了收掉
+    const t0 = this.tap0
+    this.pt = null; this.pinch0 = 0; this.tap0 = null
+    // 松手惯性：手指 90 ms 内还在动就把角速度带进 tick，上限压住别甩过头
+    if (this.moveAt && Date.now() - this.moveAt < 90) {
+      const vy = clamp(this.vyaw, -2.4, 2.4)
+      const vp = clamp(this.vpitch, -2.4, 2.4)
+      if (Math.abs(vy) > 0.15 || Math.abs(vp) > 0.15) {
+        this.spin = { vyaw: vy, vpitch: vp }
+      }
+    }
+    if (!t0 || !e || !e.changedTouches || !e.changedTouches.length) return
+    const tt = e.changedTouches[0]
+    const dx = tt.x - t0.x, dy = tt.y - t0.y
+    if (dx * dx + dy * dy > 81 || Date.now() - t0.at > 420) return
+    this.pickPart(tt.x, tt.y)
+  },
 
   touchDist(ts) {
     const dx = ts[0].x - ts[1].x, dy = ts[0].y - ts[1].y
     return Math.sqrt(dx * dx + dy * dy)
+  },
+
+  /**
+   * 点选部位。锚点投到屏幕后取 40 px 内最近者——两枚对称部位各自投影，
+   * 点哪头飞哪头。点空处则收掉聚焦卡，相当于教学页里的 Esc。
+   * build 模式下还没砌出来的部位不参与拾取（minT 是它落位的时刻）。
+   */
+  pickPart(px, py) {
+    if (this.data.sec || this.data.quizOpen || this.data.srcOpen || this.data.tour !== null) return
+    const sc = this.scene
+    if (!sc || !sc.vp) return
+    let best = null, bd = 1e9
+    for (let i = 0; i < PARTS.length; i++) {
+      const p = PARTS[i]
+      if (this.data.mode === 'build' && this.st.t < p.minT) continue
+      const s = R.project(sc, p.hit[0], p.hit[1], p.hit[2])
+      if (!s) continue
+      const dx = s[0] - px, dy = s[1] - py
+      const d = Math.sqrt(dx * dx + dy * dy)
+      if (d < 40 && d < bd) { bd = d; best = p }
+    }
+    if (!best) {
+      if (this.data.focusId) this.setData({ focus: null, focusId: null })
+      return
+    }
+    const c = this.cam
+    this.anim = {
+      t: 0,
+      from: { yaw: c.yaw, pitch: c.pitch, zoom: c.zoom, tx: c.tx, ty: c.ty, tz: c.tz },
+      to: best.cam
+    }
+    this.setData({
+      focus: { name: best.name, l1: best.l1, l2: best.l2 },
+      focusId: best.id
+    })
+  },
+
+  onFocusClose() { this.setData({ focus: null, focusId: null }) },
+
+  // ==================== 说课导览 ====================
+
+  onTourOpen() {
+    this.setData({ tour: 0, playing: false, sec: false, srcOpen: false, focus: null, focusId: null })
+    this.applyTourStep(0)
+  },
+
+  onTourNext() {
+    const next = this.data.tour + 1
+    if (next >= TOUR.length) { this.onTourExit(); return }
+    this.setData({ tour: next })
+    this.applyTourStep(next)
+  },
+
+  onTourPrev() {
+    if (this.data.tour <= 0) return
+    const prev = this.data.tour - 1
+    this.setData({ tour: prev })
+    this.applyTourStep(prev)
+  },
+
+  onTourExit() { this.setData({ tour: null }) },
+
+  /** 第 i 步：可选开关先归零，再按该步落模式、档位与机位 */
+  applyTourStep(i) {
+    const s = TOUR[i]
+    const d = {
+      tourIdx: i, tourName: s.name, tourText: s.text,
+      playing: false, flat: false, thrust: false, split: false,
+      autoFlood: false, sec: false, srcOpen: false
+    }
+    if (s.data) for (const k in s.data) d[k] = s.data[k]
+    if (s.t !== undefined) this.st.t = s.t
+    if (s.q !== undefined) { d.q = s.q; d.band = this.bandsAt(s.q) }
+    if (s.split) {
+      d.split = true
+      this.st.t = B.TOTAL
+      const c = this.cam
+      this.anim = {
+        t: 0,
+        from: { yaw: c.yaw, pitch: c.pitch, zoom: c.zoom, tx: c.tx, ty: c.ty, tz: c.tz },
+        // 与 onToggleSplit 同一机位：28 道券沿桥宽摊开，得转到侧向看
+        to: { yaw: 0.75, pitch: 0.12, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
+      }
+      d.view = 'free'
+    } else if (s.view) {
+      this.applyView(s.view)
+    }
+    this.setData(d)
   },
 
   applyView(key) {
@@ -2674,7 +3263,8 @@ Page({
     if (mode === this.data.mode) return
     if (mode === 'flood') {
       this.st.t = B.TOTAL
-      this.setData({ mode, playing: false })
+      // 泄洪只有敞肩态：营造页若开过实肩对照，切回来要重置，否则小拱被实肩填死
+      this.setData({ mode, playing: false, open: true, focus: null, focusId: null })
       // 泄洪的机位只剩全景和小拱两档了，进屋就落在全景；
       // 上一轮已经停在某一档（比如「小拱」）就别再动镜头
       if (this.data.view !== 'full' && this.data.view !== 'small') {
@@ -2682,8 +3272,8 @@ Page({
       }
     } else {
       this.st.t = 0
-      this.setData({ mode, playing: true })
-      this.applyView('full')
+      this.setData({ mode, playing: true, focus: null, focusId: null })
+      this.applyView('build')
     }
   },
 
@@ -2706,7 +3296,7 @@ Page({
   },
 
   onQ(e) {
-    this.st.q = e.detail.value
+    // 只记目标值：水面呈现值 st.q 在 tick 里缓动跟上来，不瞬移
     this.setData({
       q: e.detail.value, band: this.bandsAt(e.detail.value), autoFlood: false
     })
@@ -2723,7 +3313,7 @@ Page({
   onBand(e) {
     const q = +e.currentTarget.dataset.q
     if (!q || q === this.data.q) return
-    this.st.q = q
+    // 目标值交给 tick 缓动：跳档瞬间水面从当前位置涨落过去
     this.setData({ q: q, band: this.bandsAt(q), autoFlood: false })
   },
   onToggleSpandrel() {
@@ -2764,6 +3354,24 @@ Page({
    * 没意义；但也不能直接把 playing 置 false 就算完——关面板时再去读
    * this.data.playing 读到的已经是刚置下的那个 false，动画就再也起不来了。
    */
+  onQuizOpen() {
+    this.setData({ quizOpen: true, quizIdx: 0, quizPick: null, quizDone: false, sec: false, srcOpen: false, tour: null })
+  },
+  onQuizClose() { this.setData({ quizOpen: false }) },
+  onQuizPick(e) {
+    if (this.data.quizPick !== null) return
+    const i = +e.currentTarget.dataset.i
+    this.setData({ quizPick: i })
+  },
+  onQuizNext() {
+    if (this.data.quizIdx + 1 < QUIZ.length) {
+      this.setData({ quizIdx: this.data.quizIdx + 1, quizPick: null })
+    } else {
+      this.setData({ quizDone: true })
+    }
+  },
+  onQuizRestart() { this.setData({ quizIdx: 0, quizPick: null, quizDone: false }) },
+
   onToggleSrc() {
     if (!this.data.srcOpen) {
       this._wasPlaying = this.data.playing
@@ -2797,13 +3405,21 @@ Page({
         t: 0,
         from: { yaw: this.cam.yaw, pitch: this.cam.pitch, zoom: this.cam.zoom,
                 tx: this.cam.tx, ty: this.cam.ty, tz: this.cam.tz },
-        //   机位要转到接近侧向（yaw ≈ 1.0，也就是 57°）：28 道券是沿桥宽
-        //   方向摊开的，正面看它们几乎重合，摊开也只是一片密排的横线。
-        //   转过来才看得出是一道道**各自独立**的拱券
-        to: { yaw: 1.00, pitch: 0.12, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
+        //   机位要转到接近侧向（yaw 0.68，39°）：28 道券是沿桥宽方向
+        //   摊开的，正面看它们几乎重合，摊开也只是一片密排的横线。
+        //   转过来才看得出是一道道**各自独立**的拱券。yaw 不给到 1.0：
+        //   ±1.0 的视线正好从东岸大树（±36,21）/（±40,-23）的冠心里穿过
+        //   去；0.75-0.80 时近岸坡树群（x≈±32，z 6~45）的八面体冠以 32 m
+        //   的真实深度压在 70 m 外的水面上，冠沿在深蓝水面上像一块悬空
+        //   的绿贴图。0.68 把冠沿整个挪进右下的岸地里，树冠落在地平线
+        //   上，物理和视觉就都顺了。pitch 抬到 0.22：脚下贴脸的湿滩涂
+        //   退出主画幅，扇形展开仍保留八成半宽
+        to: { yaw: 0.68, pitch: 0.22, zoom: 0.36, tx: 0, ty: 4.0, tz: 0 }
       }
     } else {
-      this.applyView('full')
+      // 合拢回到营造机位：和建造初始同一视角，券层层次仍在，
+      // 不会又跳回正面把 28 道券叠成一团
+      this.applyView('build')
     }
   }
 })
