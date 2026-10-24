@@ -205,24 +205,29 @@
       <text class="quiz-title">考考你</text>
       <text class="quiz-close" aria-role="button" bindtap="onQuizClose">关闭</text>
     </view>
-    <block wx:if="{{!quizDone}}">
-      <view class="quiz-progress">{{quizIdx + 1}} / {{QUIZ.length}}</view>
-      <view class="quiz-q">{{QUIZ[quizIdx].q}}</view>
-      <view class="quiz-opts">
-        <view
-          class="quiz-opt {{quizPick === i ? (i === QUIZ[quizIdx].a ? 'right' : 'wrong') : ''}}"
-          wx:for="{{QUIZ[quizIdx].opts}}" wx:for-item="opt" wx:for-index="i" wx:key="*this"
-          hover-class="pressed" aria-role="button"
-          data-i="{{i}}" bindtap="onQuizPick"
-        >{{opt}}</view>
-      </view>
-      <view class="quiz-why" wx:if="{{quizPick !== null}}">{{QUIZ[quizIdx].why}}</view>
-      <view class="quiz-next" wx:if="{{quizPick !== null}}" hover-class="pressed" bindtap="onQuizNext">{{quizIdx + 1 < QUIZ.length ? '下一题' : '完成'}}</view>
-    </block>
-    <block wx:else>
-      <view class="quiz-done">五题完成！回到场景里再看看：四孔小拱的位置和过水次序，28 道券怎么一层层收分挤紧，敞肩拱比实肩拱多让出多少过水面积。</view>
-      <view class="quiz-restart" hover-class="pressed" bindtap="onQuizRestart">再来一次</view>
-    </block>
+    <view class="quiz-body">
+      <block wx:if="{{!quizDone}}">
+        <view class="quiz-progress">{{quizIdx + 1}} / {{QUIZ.length}}</view>
+        <view class="quiz-q">{{QUIZ[quizIdx].q}}</view>
+        <view class="quiz-opts">
+          <view
+            class="quiz-opt {{quizPick === i ? (i === QUIZ[quizIdx].a ? 'right' : 'wrong') : ''}}"
+            wx:for="{{QUIZ[quizIdx].opts}}" wx:for-item="opt" wx:for-index="i" wx:key="*this"
+            hover-class="pressed" aria-role="button"
+            data-i="{{i}}" bindtap="onQuizPick"
+          >{{opt}}</view>
+        </view>
+        <view class="quiz-why" wx:if="{{quizPick !== null}}">
+          <view class="quiz-why-tag">为什么</view>
+          <text>{{QUIZ[quizIdx].why}}</text>
+        </view>
+        <view class="quiz-next" wx:if="{{quizPick !== null}}" hover-class="pressed" bindtap="onQuizNext">{{quizIdx + 1 < QUIZ.length ? '下一题' : '完成'}}</view>
+      </block>
+      <block wx:else>
+        <view class="quiz-done">五题完成！回到场景里再看看：四孔小拱的位置和过水次序，28 道券怎么一层层收分挤紧，敞肩拱比实肩拱多让出多少过水面积。</view>
+        <view class="quiz-restart" hover-class="pressed" bindtap="onQuizRestart">再来一次</view>
+      </block>
+    </view>
   </view>
 
   <!-- 史料出处。必须放在最后：这一层要盖住上面的读数卡和控制台，
