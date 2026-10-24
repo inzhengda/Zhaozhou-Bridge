@@ -13,5 +13,5 @@ $RECYCLE.BIN/
 # Node.js
 node_modules/
 
-# 离屏渲染产物
+# 离屏出图的产物（SVG + PNG）。随时能用 node tools/render.js 重出
 /tools/out/

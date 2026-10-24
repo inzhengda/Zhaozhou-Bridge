@@ -9,6 +9,13 @@
     bindtouchcancel="onTouchEnd"
   ></canvas>
 
+  <!-- 覆盖层。整块按 390pt 的设计宽度排版（尺寸全是 px），
+       运行时整体缩放到设备宽度——缩放比 k 见 index.js 的 onLoad。
+       这么做的原因写在 index.wxss 的 .chrome 注释里：
+       rpx 跟着视口长，iPad 上字号、按钮、控制台一起涨到两倍，
+       而 canvas 里的标注是死像素，两边尺度对不上，比例就散了 -->
+  <view class="chrome" style="width:{{cw}}px;height:{{ch}}px;transform:scale({{k}})">
+
   <!-- 抬头。四个顶层的 top 都由 index.js 的 measureTop() 量出来，
        写死 rpx 会顶在状态栏和右上角胶囊按钮上 -->
   <view class="title" style="top:{{topTitle}}px">
@@ -93,18 +100,21 @@
         <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
       </view>
     </view>
-    <view class="cmp-line cmp-wide">此刻过水的小拱 <text class="hl">{{sp.flowing}}</text>，多走出水 <text class="hl">{{sp.nowArea}} m²</text></view>
+    <!-- 「同一水位下」这半句不能省。敞肩桥过同样的流量水位本来就低些，
+         若拿两座桥各自的水位去比，差数只剩一小半（900 m³/s 下 17 → 7）。
+         剖面图那两张（过水断面、敞肩对照）走的是同一个定义，三处才对得上 -->
+    <view class="cmp-line cmp-wide">此刻小拱：<text class="hl">{{sp.flowing}}</text>，同一水位下多让出 <text class="hl">{{sp.nowArea}} m²</text></view>
   </view>
 
   <!-- 底部控制台 -->
-  <view class="panel">
+  <view class="panel {{mode}} {{compact ? 'compact' : ''}}">
     <view class="tabs">
       <view class="tab {{mode === 'build' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-mode="build" bindtap="onTab">营 造</view>
       <view class="tab {{mode === 'flood' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-mode="flood" bindtap="onTab">泄 洪</view>
     </view>
 
     <block wx:if="{{mode === 'build'}}">
-      <view class="ctrl">
+      <view class="ctrl ctrl-main">
         <view class="btn" hover-class="pressed" aria-role="button" bindtap="onTogglePlay">{{playing ? '暂停' : '播放'}}</view>
         <view class="btn ghost" hover-class="pressed" aria-role="button" bindtap="onRestart">重砌</view>
         <slider
@@ -113,7 +123,7 @@
           bindchange="onSeek" bindchanging="onSeek"
         />
       </view>
-      <view class="ctrl">
+      <view class="ctrl ctrl-speed">
         <text class="lab">速度</text>
         <slider
           class="grow" min="0" max="3" value="1" show-value
@@ -134,7 +144,7 @@
     </block>
 
     <block wx:else>
-      <view class="ctrl">
+      <view class="ctrl ctrl-q">
         <text class="lab">水量</text>
         <slider
           class="grow" min="150" max="1300" value="{{q}}"
@@ -190,13 +200,13 @@
 
   <!-- 考考你 -->
   <view class="quiz-mask" wx:if="{{quizOpen}}" bindtap="onQuizClose"></view>
-  <view class="quiz" wx:if="{{quizOpen}}" style="top:{{topTitle}}px">
+  <view class="quiz" wx:if="{{quizOpen}}" style="top:{{topTitle}}px;max-height:{{quizMaxH}}px">
     <view class="quiz-head">
       <text class="quiz-title">考考你</text>
       <text class="quiz-close" aria-role="button" bindtap="onQuizClose">关闭</text>
     </view>
     <block wx:if="{{!quizDone}}">
-      <view class="quiz-progress">{{quizIdx + 1}} / 3</view>
+      <view class="quiz-progress">{{quizIdx + 1}} / {{QUIZ.length}}</view>
       <view class="quiz-q">{{QUIZ[quizIdx].q}}</view>
       <view class="quiz-opts">
         <view
@@ -207,10 +217,10 @@
         >{{opt}}</view>
       </view>
       <view class="quiz-why" wx:if="{{quizPick !== null}}">{{QUIZ[quizIdx].why}}</view>
-      <view class="quiz-next" wx:if="{{quizPick !== null}}" hover-class="pressed" bindtap="onQuizNext">{{quizIdx + 1 < 3 ? '下一题' : '完成'}}</view>
+      <view class="quiz-next" wx:if="{{quizPick !== null}}" hover-class="pressed" bindtap="onQuizNext">{{quizIdx + 1 < QUIZ.length ? '下一题' : '完成'}}</view>
     </block>
     <block wx:else>
-      <view class="quiz-done">三题完成！回到场景里再看看：拱肩的小拱为什么比拱顶的开口大，洪水先从哪孔漫过，水平推力往哪里走。</view>
+      <view class="quiz-done">五题完成！回到场景里再看看：四孔小拱的位置和过水次序，28 道券怎么一层层收分挤紧，敞肩拱比实肩拱多让出多少过水面积。</view>
       <view class="quiz-restart" hover-class="pressed" bindtap="onQuizRestart">再来一次</view>
     </block>
   </view>
@@ -252,5 +262,6 @@
         </view>
       </block>
     </scroll-view>
+  </view>
   </view>
 </view>

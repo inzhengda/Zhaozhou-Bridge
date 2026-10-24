@@ -222,6 +222,54 @@ function archSkin(m, cx, cy, rIn, rOut, phi0, phi1, zf0, zf1,
   if (mask & 2) face(m, [A1[0], B1[0], B1[segs], A1[segs]], color)
 }
 
+/**
+ * 建立"每条边由哪几张面共用"的邻接表，写回每张面的 nb 数组
+ * （与 face.i 同长，nb[e] 是第 e 条边对面的那张面，-1 表示这条边是网格边界）。
+ *
+ * 这是描边的依据：渲染时逐边判断"这条边该不该画"——
+ *   · 邻面不存在，或邻面背朝相机 → 剪影边（物体轮廓），画
+ *   · 邻面也朝相机、但两个面的二面角够大 → 折痕边（石头转角），画
+ *   · 邻面也朝相机、两个面几乎共面 → 弧面上的分段缝，**不画**
+ * 第三条是关键：拱券内弧是 26 段折线拼出来的，段与段夹角不到两度，
+ * 一律描边的话整圈拱腹会糊成一片灯芯绒。
+ *
+ * 键用顶点索引对。两个索引都小于 2^26，a*2^32+b 在 double 里精确，
+ * 不会撞键。只做一次，结果挂在 mesh 上，之后每帧直接读。
+ */
+function indexEdges(m) {
+  const fs = m.faces
+  const map = new Map()
+  for (let fi = 0; fi < fs.length; fi++) {
+    const idx = fs[fi].i
+    for (let e = 0; e < idx.length; e++) {
+      const a = idx[e], b = idx[(e + 1) % idx.length]
+      const key = a < b ? a * 4294967296 + b : b * 4294967296 + a
+      const list = map.get(key)
+      if (list) list.push(fi)
+      else map.set(key, [fi])
+    }
+  }
+  for (let fi = 0; fi < fs.length; fi++) {
+    const f = fs[fi]
+    const idx = f.i
+    const nb = new Array(idx.length)
+    for (let e = 0; e < idx.length; e++) {
+      const a = idx[e], b = idx[(e + 1) % idx.length]
+      const key = a < b ? a * 4294967296 + b : b * 4294967296 + a
+      const list = map.get(key)
+      let found = -1
+      if (list) {
+        for (let t = 0; t < list.length; t++) {
+          if (list[t] !== fi) { found = list[t]; break }
+        }
+      }
+      nb[e] = found
+    }
+    f.nb = nb
+  }
+  m.indexed = true
+}
+
 /** 把 src 的所有顶点/面并进 dst（带索引偏移） */
 function merge(dst, src) {
   const off = dst.pos.length / 3
@@ -250,5 +298,5 @@ function centerOf(m) {
 
 module.exports = {
   newMesh, setSeed, vert, face, quad, prismZ, box, archRing, archRingT, archSkin,
-  merge, centerOf, LIGHT, AMB
+  merge, centerOf, indexEdges, LIGHT, AMB
 }

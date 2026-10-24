@@ -6,9 +6,29 @@
  */
 
 const M = require('./mat4.js')
+const MESH = require('./mesh.js')
 
 const NEAR_W = 0.25
 const MAX_CLIP = 8          // 一个面最多被裁出 8 个顶点
+
+// ---- 描边 ----
+// 全片平涂的桥读起来是一坨色块，靠 mesh.js 里每面 ±4% 的明暗抖动分开相邻的券石，
+// 代价是大面积糊、拱下没有边界。这里按"这条边两侧的面是什么关系"挑边描一遍：
+// 剪影（邻面不存在或背朝相机）和折痕（二面角够大）画，弧面上的分段缝不画。
+//
+// 三个数都是看着图调的，改之前先跑 tools/render.js 出接触表对比。
+const OUTLINE_COS = 0.94     // 二面角余弦阈值，0.94 ≈ 20°。低于它才算折痕
+const OUTLINE_DARK = 0.62    // 描边色 = 该面自身的颜色 × 这个。跟着面色走，
+                             // 深色石头描深线、浅色描浅线，整幅画才是同一个调子
+const OUTLINE_ALPHA = 0.5
+const OUTLINE_W = 0.7
+
+// 描边总开关。给 tools/render.js 的 --no-outline 用：判断画面上的某条线
+// 到底是描边画出来的、还是几何本身的缝，得能一键关掉对比着看。
+// 和 bridge.js 的 setDetail 是同一个路数——留一个开发期的对照开关
+let OUTLINE_ON = true
+function setOutline(on) { OUTLINE_ON = !!on }
+
 // 没入水下的地形在排序时往后沉这么多米。
 //
 // 原取 10 m，只够压住"相邻两格格心横坐标差一整格宽"的深度误差（13.8 m ×
@@ -289,6 +309,44 @@ function pushFace(sc, pos, faceRec, opt) {
     // 由调用方保证不描边（消融对账：描边去净后目检干净）
     ln: opt.seam ? (opt.seamLn || 1) : 0
   }
+
+  // 5) 描边。逐条边问一句"这条边看不看得见"，看得见的收进 o。
+  //
+  // 只在**没被近平面裁过**的面上做：裁剪会往 p 里插交点，p 的下标就和
+  // idx 对不上了，映射不回"这是第几条边"。裁剪到的面占全画幅 2% 不到
+  // （全景 2333 个面里 44 个），少描这几条边看不出来。
+  if (OUTLINE_ON && opt.outline !== false && faceRec.nb && out === n && n >= 3) {
+    const fs = opt.mesh ? opt.mesh.faces : null
+    const nb = faceRec.nb
+    const wx = pos[faceRec.i[0] * 3]
+    const wy = pos[faceRec.i[0] * 3 + 1]
+    const wz = pos[faceRec.i[0] * 3 + 2]
+    const vx = wx - sc.ex, vy = wy - sc.ey, vz = wz - sc.ez
+    let o = null
+    for (let e = 0; e < n; e++) {
+      const k = nb[e]
+      let keep = true
+      if (k >= 0 && fs) {
+        const nf = fs[k]
+        // 邻面也朝相机：只有二面角够大才算折痕。拱券内弧是 26 段拼的，
+        // 段间夹角不到两度，这一句就是那圈灯芯绒的开关
+        if (nf.nx * vx + nf.ny * vy + nf.nz * vz < 0) {
+          keep = faceRec.nx * nf.nx + faceRec.ny * nf.ny + faceRec.nz * nf.nz < OUTLINE_COS
+        }
+      }
+      if (!keep) continue
+      if (!o) o = []
+      const a = e * 2, b = ((e + 1) % n) * 2
+      o.push(p[a], p[a + 1], p[b], p[b + 1])
+    }
+    if (o) {
+      rec.o = o
+      rec.os = cssOf(r * OUTLINE_DARK, g * OUTLINE_DARK, b * OUTLINE_DARK)
+      rec.oa = rec.a * OUTLINE_ALPHA
+      rec.ow = OUTLINE_W
+    }
+  }
+
   sc.list.push(rec)
   sc.stats.drawn++
 }
@@ -296,6 +354,9 @@ function pushFace(sc, pos, faceRec, opt) {
 /** 提交一个网格；mat 为 null 表示顶点已是世界坐标 */
 function pushMesh(sc, mesh, mat, opt) {
   const pos = mesh.pos
+  // 邻接表只建一次，挂回网格上。之后的每一帧、每一张图都直接读
+  if (!mesh.indexed) MESH.indexEdges(mesh)
+  if (!opt.mesh) opt = { ...opt, mesh: mesh }
   if (!mat) {
     for (let i = 0; i < mesh.faces.length; i++) pushFace(sc, pos, mesh.faces[i], opt)
     return
@@ -318,13 +379,20 @@ function pushMesh(sc, mesh, mat, opt) {
     let ny = e1z * e2x - e1x * e2z
     let nz = e1x * e2y - e1y * e2x
     const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1
-    pushFace(sc, tp, { i: f.i, c: f.c, nx: nx / l, ny: ny / l, nz: nz / l, k: f.k, j: f.j }, opt)
+    // nb 原样带过去：邻面的法线取自网格里存的那份（未经变换）。这里的矩阵
+    // 只有平移和等比缩放（drawPieces 的飞入），等比缩放不改法线，所以够用
+    pushFace(sc, tp, {
+      i: f.i, c: f.c, nx: nx / l, ny: ny / l, nz: nz / l,
+      k: f.k, j: f.j, nb: f.nb
+    }, opt)
   }
 }
 
 /** 只做平移的网格提交：法线和光照系数可原样复用，比重算快得多 */
 function pushMeshT(sc, mesh, dx, dy, dz, opt) {
   const pos = mesh.pos
+  if (!mesh.indexed) MESH.indexEdges(mesh)
+  if (!opt.mesh) opt = { ...opt, mesh: mesh }
   const tp = new Array(pos.length)
   for (let i = 0; i < pos.length; i += 3) {
     tp[i] = pos[i] + dx
@@ -415,6 +483,8 @@ function pushTri(sc, p0, p1, p2, r, g, b, alpha) {
 function byDepth(a, b) { return b.d - a.d }
 
 function drawList(ctx, list) {
+  // 圆头端帽：每条边是独立的一段，平头会在石头转角处留下一丝缝
+  ctx.lineCap = 'round'
   for (let i = 0; i < list.length; i++) {
     const rec = list[i]
     const p = rec.p
@@ -425,14 +495,37 @@ function drawList(ctx, list) {
     for (let k = 2; k < p.length; k += 2) ctx.lineTo(p[k], p[k + 1])
     ctx.closePath()
     ctx.fill()
+
+    // 描边必须紧跟着这一面的填充画：整幅画是按深度排好序的，
+    // 攒到最后统一描就会让近处的线被远处的面盖掉
+    if (rec.o) {
+      const o = rec.o
+      ctx.strokeStyle = rec.os
+      ctx.lineWidth = rec.ow
+      if (rec.oa !== 1) ctx.globalAlpha = rec.oa
+      ctx.beginPath()
+      for (let k = 0; k < o.length; k += 4) {
+        ctx.moveTo(o[k], o[k + 1])
+        ctx.lineTo(o[k + 2], o[k + 3])
+      }
+      ctx.stroke()
+    }
+
+    // 水面接缝那一圈：描的是这个多边形自己的边（同色加粗），
+    // 和上面按二面角挑出来的实体描边不是一回事，两样各画各的
     if (rec.ln) {
+      ctx.globalAlpha = rec.a
       ctx.lineWidth = rec.ln
       ctx.lineJoin = 'round'
       ctx.strokeStyle = rec.s
       ctx.stroke()
     }
-    if (rec.a !== 1) ctx.globalAlpha = 1
+
+    if (rec.a !== 1 || (rec.o && rec.oa !== 1)) ctx.globalAlpha = 1
   }
+  // 复位：lineCap 是 ctx 上的常驻状态，留着 'round' 会影响后面画的
+  // 剖面图尺寸线（线端会多出小圆头，压在标线上很难看）
+  ctx.lineCap = 'butt'
 }
 
 /**
@@ -446,5 +539,5 @@ function flush(ctx, sc) {
 
 module.exports = {
   createScene, beginFrame, pushFace, pushMesh, pushMeshT, pushPoly,
-  pushSprite, pushSegment, pushTri, flush, project, cssOf
+  pushSprite, pushSegment, pushTri, flush, project, cssOf, setOutline
 }

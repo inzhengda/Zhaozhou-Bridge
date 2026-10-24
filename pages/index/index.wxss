@@ -21,6 +21,36 @@ page {
   height: 100%;
 }
 
+/* ---------- 覆盖层容器（平板适配的根） ----------
+
+   覆盖层整块按 390pt 的设计宽度排版，尺寸全部写成 px，
+   运行时由 index.js 算出缩放比 k，整层 transform: scale(k) 放到设备宽度上。
+
+   原来这一层用的是 rpx。rpx 的定义是 1rpx = 视口宽 / 750，
+   手机 390pt 上是 0.52px，iPad 竖屏 820pt 上就是 1.09px——整整两倍多。
+   于是标题、按钮、底部控制台在平板上一起涨到两倍，
+   而 canvas 里的标注字号、3D 机位都是死像素，尺度对不上，
+   看上去就是"比例散了"：字压着字，卡压着按钮，控制台吃掉半屏。
+
+   改成 px 之后，手机上一点不变（390pt 上 1rpx 本来就是 0.52px），
+   平板上是同一套设计整体放大，层次关系还是原来那套。 */
+.chrome {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  /* 这一层盖住了整块画布，触摸默认落到它身上，canvas 就收不到
+     拖动旋转、双指缩放和点桥身聚焦了。容器一律不吃事件，
+     只有真能点的元件在下面自己接回来 */
+  pointer-events: none;
+}
+
+.src-btn, .tab, .btn, .chip, .band, .tour-btn, .tour-exit, .focus-close,
+.src-close, .src-tab, .quiz-close, .quiz-opt, .quiz-next, .quiz-restart,
+.quiz, .quiz-mask, .src, .src-mask, .panel, .phase, .hud, .cmp, .focus, .tour {
+  pointer-events: auto;
+}
+
 /* ---------- 抬头 ---------- */
 
 /* top 由 index.js 的 measureTop() 量出来，走行内 style。
@@ -28,24 +58,24 @@ page {
    env() 恒为 0，这一块会正好顶在状态栏和右上角胶囊按钮下面 */
 .title {
   position: absolute;
-  left: 34rpx;
+  left: 17.5px;
   pointer-events: none;
 }
 
 .title-main {
-  font-size: 46rpx;
+  font-size: 24px;
   font-weight: 600;
-  letter-spacing: 10rpx;
+  letter-spacing: 5px;
   color: #2b2723;
-  text-shadow: 0 2rpx 10rpx rgba(255, 255, 255, 0.6);
+  text-shadow: 0 1px 5px rgba(255, 255, 255, 0.6);
 }
 
 .title-sub {
-  margin-top: 6rpx;
-  font-size: 20rpx;
-  letter-spacing: 2rpx;
+  margin-top: 3px;
+  font-size: 10.5px;
+  letter-spacing: 1px;
   color: rgba(43, 39, 35, 0.62);
-  text-shadow: 0 2rpx 8rpx rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 4px rgba(255, 255, 255, 0.55);
 }
 
 /* ---------- 右上角的两枚浮层开关 ---------- */
@@ -55,19 +85,19 @@ page {
    而不是底下那排模式内的 chip 里 */
 .topbtns {
   position: absolute;
-  right: 34rpx;
+  right: 17.5px;
   display: flex;
 }
 
 .src-btn {
-  margin-left: 12rpx;
-  padding: 8rpx 20rpx;
-  font-size: 20rpx;
-  letter-spacing: 1rpx;
-  border-radius: 999rpx;
+  margin-left: 6px;
+  padding: 4px 10.5px;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  border-radius: 519.5px;
   color: #8e3b26;
   background: rgba(252, 248, 240, 0.84);
-  border: 1rpx solid rgba(158, 132, 96, 0.42);
+  border: 0.5px solid rgba(158, 132, 96, 0.42);
 }
 
 .src-mask {
@@ -81,14 +111,14 @@ page {
 
 .src {
   position: absolute;
-  left: 30rpx;
-  right: 30rpx;
-  bottom: calc(52rpx + env(safe-area-inset-bottom));
+  left: 15.5px;
+  right: 15.5px;
+  bottom: calc(27px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  border-radius: 18rpx;
+  border-radius: 9.5px;
   background: #fcf8f0;
-  box-shadow: 0 12rpx 44rpx rgba(40, 30, 18, 0.3);
+  box-shadow: 0 6px 23px rgba(40, 30, 18, 0.3);
   overflow: hidden;
 }
 
@@ -96,39 +126,39 @@ page {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 22rpx 28rpx 16rpx;
-  border-bottom: 1rpx solid rgba(158, 132, 96, 0.26);
+  padding: 11.5px 14.5px 8.5px;
+  border-bottom: 0.5px solid rgba(158, 132, 96, 0.26);
 }
 
 .src-title {
-  font-size: 27rpx;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 3rpx;
+  letter-spacing: 1.5px;
   color: #2b2723;
 }
 
 .src-close {
-  font-size: 22rpx;
+  font-size: 11.5px;
   color: #8e3b26;
-  padding: 4rpx 12rpx;
+  padding: 2px 6px;
 }
 
 /* 页签的间距用左右对称的 margin，不用 :last-child。
    WXSS 只认 .class / #id / 元素 / ::after / ::before 这一小撮选择器，
-   伪类拿掉末项边距那一套在这里写不出来；对称留白多缩进 4rpx，看不出 */
+   伪类拿掉末项边距那一套在这里写不出来；对称留白多缩进 2px，看不出 */
 .src-tabs {
   display: flex;
-  padding: 12rpx 24rpx 0;
+  padding: 6px 12.5px 0;
 }
 
 .src-tab {
   flex: 1;
   text-align: center;
-  padding: 10rpx 0;
-  margin: 0 4rpx;
-  font-size: 23rpx;
-  letter-spacing: 4rpx;
-  border-radius: 8rpx;
+  padding: 5px 0;
+  margin: 0 2px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  border-radius: 4px;
   color: rgba(43, 39, 35, 0.6);
   background: rgba(158, 132, 96, 0.14);
 }
@@ -145,32 +175,32 @@ page {
   flex: 1;
   min-height: 0;
   /* scroll-view 不吃父级的 overflow:hidden（iOS 原生层浮在 WebView 之上），
-     没有这行，左右 padding 会把盒子撑得比面板宽 56rpx，右缘顶出屏幕，
+     没有这行，左右 padding 会把盒子撑得比面板宽 29px，右缘顶出屏幕，
      右栏文字和注释块整列被切——数据出处面板文字截断的根因就是它 */
   box-sizing: border-box;
-  padding: 16rpx 28rpx 28rpx;
+  padding: 8.5px 14.5px 14.5px;
 }
 
 .src-group {
-  margin-top: 14rpx;
-  font-size: 22rpx;
+  margin-top: 7.5px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 2rpx;
+  letter-spacing: 1px;
   color: #8e3b26;
 }
 
-/* 条目用两栏对齐：左边名目、右边数值。名目定宽 150rpx，
+/* 条目用两栏对齐：左边名目、右边数值。名目定宽 78px，
    最长的「矢跨比」「并列拱券」都放得下，不必换行 */
 .src-row {
   display: flex;
-  padding: 7rpx 0;
-  border-bottom: 1rpx solid rgba(158, 132, 96, 0.14);
+  padding: 3.5px 0;
+  border-bottom: 0.5px solid rgba(158, 132, 96, 0.14);
 }
 
 .src-k {
-  width: 158rpx;
+  width: 82px;
   flex-shrink: 0;
-  font-size: 21rpx;
+  font-size: 11px;
   color: rgba(43, 39, 35, 0.5);
 }
 
@@ -179,14 +209,14 @@ page {
   /* flex 项默认 min-width:auto，长文本（书名号、数字串）会把右栏撑出容器 */
   min-width: 0;
   word-break: break-word;
-  font-size: 22rpx;
+  font-size: 11.5px;
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.82);
 }
 
 .src-src {
-  margin-top: 8rpx;
-  font-size: 18rpx;
+  margin-top: 4px;
+  font-size: 9.5px;
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.38);
 }
@@ -197,14 +227,14 @@ page {
    讲的时候眼睛不用横着找 */
 .an-row {
   display: flex;
-  padding: 12rpx 0 14rpx;
-  border-bottom: 1rpx solid rgba(158, 132, 96, 0.14);
+  padding: 6px 0 7.5px;
+  border-bottom: 0.5px solid rgba(158, 132, 96, 0.14);
 }
 
 .an-y {
-  width: 168rpx;
+  width: 87.5px;
   flex-shrink: 0;
-  font-size: 21rpx;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.4;
   color: #8e3b26;
@@ -216,15 +246,15 @@ page {
 
 .an-t {
   display: block;
-  font-size: 22rpx;
+  font-size: 11.5px;
   line-height: 1.55;
   color: rgba(43, 39, 35, 0.82);
 }
 
 .an-s {
   display: block;
-  margin-top: 6rpx;
-  font-size: 18rpx;
+  margin-top: 3px;
+  font-size: 9.5px;
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.38);
 }
@@ -233,49 +263,49 @@ page {
 
 .phase {
   position: absolute;
-  left: 34rpx;
-  right: 34rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 14rpx;
+  left: 17.5px;
+  right: 17.5px;
+  padding: 10.5px 12.5px;
+  border-radius: 7.5px;
   background: rgba(252, 248, 240, 0.9);
-  border: 1rpx solid rgba(158, 132, 96, 0.34);
-  box-shadow: 0 6rpx 24rpx rgba(60, 46, 28, 0.13);
+  border: 0.5px solid rgba(158, 132, 96, 0.34);
+  box-shadow: 0 3px 12.5px rgba(60, 46, 28, 0.13);
 }
 
 .phase-name {
-  font-size: 27rpx;
+  font-size: 14px;
   font-weight: 600;
   color: #8e3b26;
-  letter-spacing: 2rpx;
+  letter-spacing: 1px;
 }
 
 .phase-desc {
-  margin-top: 6rpx;
-  font-size: 21rpx;
+  margin-top: 3px;
+  font-size: 11px;
   line-height: 1.45;
   color: rgba(43, 39, 35, 0.68);
 }
 
 .bar {
-  margin-top: 14rpx;
-  height: 6rpx;
-  border-radius: 3rpx;
+  margin-top: 7.5px;
+  height: 3px;
+  border-radius: 1.5px;
   background: rgba(158, 132, 96, 0.22);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 3rpx;
+  border-radius: 1.5px;
   background: linear-gradient(90deg, #c4563a, #d99a52);
   transition: width 0.12s linear;
 }
 
 .phase-foot {
-  margin-top: 9rpx;
+  margin-top: 4.5px;
   display: flex;
   justify-content: space-between;
-  font-size: 19rpx;
+  font-size: 10px;
   color: rgba(43, 39, 35, 0.5);
 }
 
@@ -283,13 +313,13 @@ page {
 
 .hud {
   position: absolute;
-  left: 34rpx;
-  right: 34rpx;
-  padding: 14rpx 10rpx;
-  border-radius: 14rpx;
+  left: 17.5px;
+  right: 17.5px;
+  padding: 7.5px 5px;
+  border-radius: 7.5px;
   background: rgba(22, 32, 44, 0.72);
   backdrop-filter: blur(6px);
-  box-shadow: 0 6rpx 24rpx rgba(14, 22, 32, 0.26);
+  box-shadow: 0 3px 12.5px rgba(14, 22, 32, 0.26);
 }
 
 .hud-row {
@@ -302,15 +332,15 @@ page {
 }
 
 .cell-v {
-  font-size: 32rpx;
+  font-size: 16.5px;
   font-weight: 600;
   color: #eef4f8;
   font-variant-numeric: tabular-nums;
 }
 
 .cell-k {
-  margin-top: 2rpx;
-  font-size: 18rpx;
+  margin-top: 1px;
+  font-size: 9.5px;
   color: rgba(214, 230, 240, 0.6);
 }
 
@@ -318,15 +348,16 @@ page {
 
 /* 这张卡的底边离桥面最近：抬头量到胶囊下沿、读数卡再往下排，
    390 px 宽的机器上算下来正好压在桥面栏板顶上。行高收到 1.42、
-   上下留白收到 12rpx，整卡矮掉约 10 px，才让得开 */
+   上下留白收到 6px，整卡矮掉约 10 px，才让得开 */
 .cmp {
   position: absolute;
-  left: 34rpx;
-  padding: 12rpx 20rpx;
-  border-radius: 14rpx;
+  left: 17.5px;
+  right: 17.5px;
+  padding: 6px 10.5px;
+  border-radius: 7.5px;
   background: rgba(252, 248, 240, 0.9);
-  border-left: 5rpx solid #c4563a;
-  box-shadow: 0 6rpx 22rpx rgba(60, 46, 28, 0.13);
+  border-left: 2.5px solid #c4563a;
+  box-shadow: 0 3px 11.5px rgba(60, 46, 28, 0.13);
 }
 
 /* 两栏并排。左栏「此刻的水力对比」、右栏「静态的省料账」，
@@ -337,23 +368,23 @@ page {
 
 .cmp-col {
   flex: 1;
-  padding-right: 14rpx;
+  padding-right: 7.5px;
 }
 
 .cmp-title {
-  font-size: 19rpx;
+  font-size: 10px;
   font-weight: 600;
   color: #8e3b26;
-  margin-bottom: 6rpx;
+  margin-bottom: 3px;
 }
 
 /* 横跨两栏的那一行（此刻过水的是哪几孔小拱），与上面两栏之间留一档间距 */
 .cmp-wide {
-  margin-top: 8rpx;
+  margin-top: 4px;
 }
 
 .cmp-line {
-  font-size: 19rpx;
+  font-size: 10px;
   line-height: 1.42;
   color: rgba(43, 39, 35, 0.7);
 }
@@ -370,56 +401,56 @@ page {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 16rpx 26rpx calc(24rpx + env(safe-area-inset-bottom));
-  border-radius: 26rpx 26rpx 0 0;
+  padding: 8.5px 13.5px calc(12.5px + env(safe-area-inset-bottom));
+  border-radius: 13.5px 13.5px 0 0;
   background: rgba(252, 248, 240, 0.94);
-  box-shadow: 0 -6rpx 30rpx rgba(60, 46, 28, 0.15);
+  box-shadow: 0 -3px 15.5px rgba(60, 46, 28, 0.15);
 }
 
 .tabs {
   display: flex;
-  gap: 10rpx;
-  padding: 5rpx;
-  border-radius: 12rpx;
+  gap: 5px;
+  padding: 2.5px;
+  border-radius: 6px;
   background: rgba(158, 132, 96, 0.16);
 }
 
 .tab {
   flex: 1;
   text-align: center;
-  padding: 12rpx 0;
-  font-size: 25rpx;
-  letter-spacing: 6rpx;
+  padding: 6px 0;
+  font-size: 13px;
+  letter-spacing: 3px;
   color: rgba(43, 39, 35, 0.6);
-  border-radius: 9rpx;
+  border-radius: 4.5px;
 }
 
 .tab.on {
   background: #fdfaf4;
   color: #8e3b26;
   font-weight: 600;
-  box-shadow: 0 2rpx 8rpx rgba(60, 46, 28, 0.12);
+  box-shadow: 0 1px 4px rgba(60, 46, 28, 0.12);
 }
 
 .ctrl {
   display: flex;
   align-items: center;
-  gap: 14rpx;
-  margin-top: 10rpx;
+  gap: 7.5px;
+  margin-top: 5px;
 }
 
 .grow { flex: 1; }
 
 .lab {
-  font-size: 22rpx;
+  font-size: 11.5px;
   color: rgba(43, 39, 35, 0.62);
-  min-width: 60rpx;
+  min-width: 31px;
 }
 
 .val {
-  font-size: 21rpx;
+  font-size: 11px;
   color: #3a6f9e;
-  min-width: 140rpx;
+  min-width: 73px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -430,19 +461,19 @@ page {
    三段全亮时靠每条左边的细白线留着界，不至于糊成一条蓝 */
 .bands {
   display: flex;
-  margin-top: 8rpx;
-  border-radius: 8rpx;
+  margin-top: 4px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .band {
-  padding: 7rpx 2rpx;
+  padding: 3.5px 1px;
   text-align: center;
   white-space: nowrap;
-  font-size: 18rpx;
+  font-size: 9.5px;
   color: rgba(43, 39, 35, 0.52);
   background: rgba(158, 132, 96, 0.16);
-  border-left: 1rpx solid rgba(252, 248, 240, 0.85);
+  border-left: 0.5px solid rgba(252, 248, 240, 0.85);
 }
 
 .band.on {
@@ -451,9 +482,9 @@ page {
 }
 
 .btn {
-  padding: 12rpx 30rpx;
-  font-size: 24rpx;
-  border-radius: 10rpx;
+  padding: 6px 15.5px;
+  font-size: 12.5px;
+  border-radius: 5px;
   color: #fdf6ec;
   background: #c4563a;
 }
@@ -466,14 +497,14 @@ page {
 .views {
   display: flex;
   flex-wrap: wrap;
-  gap: 10rpx;
-  margin-top: 10rpx;
+  gap: 5px;
+  margin-top: 5px;
 }
 
 .chip {
-  padding: 9rpx 22rpx;
-  font-size: 22rpx;
-  border-radius: 999rpx;
+  padding: 4.5px 11.5px;
+  font-size: 11.5px;
+  border-radius: 519.5px;
   color: rgba(43, 39, 35, 0.66);
   background: rgba(158, 132, 96, 0.15);
 }
@@ -484,8 +515,8 @@ page {
 }
 
 .hint {
-  margin: 12rpx 4rpx 0;
-  font-size: 19rpx;
+  margin: 6px 2px 0;
+  font-size: 10px;
   line-height: 1.5;
   color: rgba(43, 39, 35, 0.46);
 }
@@ -496,14 +527,14 @@ page {
    左侧一道朱红竖线标记"这是选中态"，和 .cmp 的强调写法一致 */
 .focus {
   position: absolute;
-  left: 34rpx;
-  right: 34rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 14rpx;
+  left: 17.5px;
+  right: 17.5px;
+  padding: 10.5px 12.5px;
+  border-radius: 7.5px;
   background: rgba(252, 248, 240, 0.94);
-  border: 1rpx solid rgba(158, 132, 96, 0.34);
-  border-left: 5rpx solid #c4563a;
-  box-shadow: 0 6rpx 24rpx rgba(60, 46, 28, 0.13);
+  border: 0.5px solid rgba(158, 132, 96, 0.34);
+  border-left: 2.5px solid #c4563a;
+  box-shadow: 0 3px 12.5px rgba(60, 46, 28, 0.13);
 }
 
 .focus-head {
@@ -513,28 +544,28 @@ page {
 }
 
 .focus-name {
-  font-size: 27rpx;
+  font-size: 14px;
   font-weight: 600;
   color: #8e3b26;
-  letter-spacing: 2rpx;
+  letter-spacing: 1px;
 }
 
 .focus-close {
-  font-size: 22rpx;
+  font-size: 11.5px;
   color: #8e3b26;
-  padding: 4rpx 12rpx;
+  padding: 2px 6px;
 }
 
 .focus-l1 {
-  margin-top: 8rpx;
-  font-size: 21rpx;
+  margin-top: 4px;
+  font-size: 11px;
   line-height: 1.45;
   color: rgba(43, 39, 35, 0.8);
 }
 
 .focus-l2 {
-  margin-top: 4rpx;
-  font-size: 20rpx;
+  margin-top: 2px;
+  font-size: 10.5px;
   line-height: 1.45;
   color: rgba(43, 39, 35, 0.6);
 }
@@ -549,11 +580,11 @@ page {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 18rpx 30rpx calc(22rpx + env(safe-area-inset-bottom));
-  border-radius: 26rpx 26rpx 0 0;
-  border-top: 5rpx solid #c4563a;
+  padding: 9.5px 15.5px calc(11.5px + env(safe-area-inset-bottom));
+  border-radius: 13.5px 13.5px 0 0;
+  border-top: 2.5px solid #c4563a;
   background: rgba(252, 248, 240, 0.97);
-  box-shadow: 0 -6rpx 30rpx rgba(60, 46, 28, 0.18);
+  box-shadow: 0 -3px 15.5px rgba(60, 46, 28, 0.18);
 }
 
 .tour-head {
@@ -563,9 +594,9 @@ page {
 
 .tour-step {
   flex-shrink: 0;
-  padding: 4rpx 16rpx;
-  border-radius: 999rpx;
-  font-size: 20rpx;
+  padding: 2px 8.5px;
+  border-radius: 519.5px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   color: #fdf6ec;
   background: #c4563a;
@@ -573,45 +604,45 @@ page {
 
 .tour-name {
   flex: 1;
-  margin-left: 16rpx;
-  font-size: 27rpx;
+  margin-left: 8.5px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 2rpx;
+  letter-spacing: 1px;
   color: #8e3b26;
 }
 
 .tour-exit {
   flex-shrink: 0;
-  font-size: 22rpx;
+  font-size: 11.5px;
   color: rgba(43, 39, 35, 0.55);
-  padding: 6rpx 12rpx;
+  padding: 3px 6px;
 }
 
 .tour-text {
-  margin-top: 12rpx;
-  font-size: 21rpx;
+  margin-top: 6px;
+  font-size: 11px;
   line-height: 1.6;
   color: rgba(43, 39, 35, 0.78);
 }
 
 .tour-btns {
   display: flex;
-  margin-top: 16rpx;
+  margin-top: 8.5px;
 }
 
 .tour-btn {
   flex: 1;
   text-align: center;
-  padding: 14rpx 0;
-  font-size: 24rpx;
-  border-radius: 10rpx;
+  padding: 7.5px 0;
+  font-size: 12.5px;
+  border-radius: 5px;
   color: #8e3b26;
   background: rgba(196, 86, 58, 0.13);
 }
 
 /* WXSS 拿不到 :last-child，右距只写在"上一步"这一枚上 */
 .tour-btn.prev {
-  margin-right: 14rpx;
+  margin-right: 7.5px;
 }
 
 .tour-btn.off {
@@ -637,27 +668,133 @@ page {
   opacity: 0.82;
 }
 
-.src-btn { min-height: 56rpx; display: flex; align-items: center; }
-.tab { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
-.btn { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
-.chip { min-height: 64rpx; display: flex; align-items: center; justify-content: center; }
-.band { min-height: 56rpx; display: flex; align-items: center; justify-content: center; }
-.tour-btn { min-height: 80rpx; display: flex; align-items: center; justify-content: center; }
+.src-btn { min-height: 29px; display: flex; align-items: center; }
+.tab { min-height: 37.5px; display: flex; align-items: center; justify-content: center; }
+.btn { min-height: 37.5px; display: flex; align-items: center; justify-content: center; }
+.chip { min-height: 33.5px; display: flex; align-items: center; justify-content: center; }
+.band { min-height: 29px; display: flex; align-items: center; justify-content: center; }
+.tour-btn { min-height: 41.5px; display: flex; align-items: center; justify-content: center; }
 
 /* 考考你 */
 .quiz-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,.45); z-index: 98; }
-.quiz { position: fixed; left: 16rpx; right: 16rpx; z-index: 99; background: #141414; border: 1px solid #2a2a2a; border-radius: 12rpx; padding: 24rpx; max-height: 70vh; overflow-y: auto; }
-.quiz-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
-.quiz-title { font-size: 30rpx; font-weight: 600; color: #e8e8e8; }
-.quiz-close { font-size: 26rpx; color: #999; }
-.quiz-progress { font-size: 22rpx; color: #777; margin-bottom: 8rpx; }
-.quiz-q { font-size: 28rpx; color: #ddd; line-height: 1.5; margin-bottom: 16rpx; }
-.quiz-opts { display: flex; flex-direction: column; gap: 10rpx; }
-.quiz-opt { padding: 16rpx 20rpx; border: 1px solid #333; border-radius: 8rpx; font-size: 26rpx; color: #bbb; }
+/* 最高多少：不能写 70vh。整块浮层是 scale(k) 放大过的，
+   vh 又是按设备真高算的，70vh 会被放大成九成屏高。
+   高度由 index.js 按设计空间算好，走行内 style */
+.quiz { position: fixed; left: 8.5px; right: 8.5px; z-index: 99; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; padding: 12.5px; overflow-y: auto; }
+.quiz-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.quiz-title { font-size: 15.5px; font-weight: 600; color: #e8e8e8; }
+.quiz-close { font-size: 13.5px; color: #999; }
+.quiz-progress { font-size: 11.5px; color: #777; margin-bottom: 4px; }
+.quiz-q { font-size: 14.5px; color: #ddd; line-height: 1.5; margin-bottom: 8.5px; }
+.quiz-opts { display: flex; flex-direction: column; gap: 5px; }
+.quiz-opt { padding: 8.5px 10.5px; border: 1px solid #333; border-radius: 4px; font-size: 13.5px; color: #bbb; }
 .quiz-opt.right { border-color: #4a4; color: #6c6; background: rgba(68,170,68,.08); }
 .quiz-opt.wrong { border-color: #a44; color: #c66; background: rgba(170,68,68,.08); }
-.quiz-why { margin-top: 14rpx; padding: 14rpx; background: rgba(255,255,255,.04); border-radius: 6rpx; font-size: 24rpx; color: #99a; line-height: 1.6; }
-.quiz-next { margin-top: 16rpx; text-align: center; padding: 16rpx; border: 1px solid #556; border-radius: 8rpx; font-size: 28rpx; color: #ccd; }
-.quiz-done { font-size: 26rpx; color: #aab; line-height: 1.7; margin-bottom: 16rpx; }
-.quiz-restart { text-align: center; padding: 14rpx; border: 1px solid #456; border-radius: 8rpx; font-size: 26rpx; color: #bcd; }
+.quiz-why { margin-top: 7.5px; padding: 7.5px; background: rgba(255,255,255,.04); border-radius: 3px; font-size: 12.5px; color: #99a; line-height: 1.6; }
+.quiz-next { margin-top: 8.5px; text-align: center; padding: 8.5px; border: 1px solid #556; border-radius: 4px; font-size: 14.5px; color: #ccd; }
+.quiz-done { font-size: 13.5px; color: #aab; line-height: 1.7; margin-bottom: 8.5px; }
+.quiz-restart { text-align: center; padding: 7.5px; border: 1px solid #456; border-radius: 4px; font-size: 13.5px; color: #bcd; }
 
+/* ==================== 平板限宽 ====================
+   iPad 上画布比手机宽两倍多，卡片和控制台跟着拉满就散了：
+   文字行太长，按钮被撑成大饼，层次全没了。
+   这里给浮层统一封一个上限并居中——宽屏时收成一根内容列，
+   手机上（设计宽度 390）上限不生效，版式一点不变。
+
+   box-sizing: border-box 是为了把 padding 也算进上限里，
+   否则 460 的内容宽再一加 padding，卡片又胖出二十几像素。
+   这些元素宽度是 auto 的（靠 left/right 撑开），
+   改成 border-box 也不影响手机上的实际宽度 */
+.phase, .hud, .cmp, .focus, .src {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+/* 控制台、导览是通栏的底板，内容收进同一根列里 */
+.panel > view, .tour > view {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 考考你是浮在中间的一块深色卡片，限宽居中即可 */
+.quiz {
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+/* ==================== 平板：控制台压扁 ====================
+   平板竖屏 820pt 宽，控制台沿用手机的 390pt 版式、整体放大 1.3 倍后
+   铺满整条底边——字大、按钮大，一屏被底板吃掉两成，比例全散了。
+   这里把它改成一张居中的浮卡（宽度跟上面的卡片同一根列，460px），
+   内部从"一行一块"改成"能并排就并排"，高度压掉三成。
+
+   触发条件在 index.js：设备宽过 468pt（k>=1.2）才给面板加 .compact，
+   手机 k=1，下面这整段规则一条也不生效 */
+.panel.compact {
+  left: 50%;
+  right: auto;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: 460px;
+  max-width: calc(100% - 24px);
+  padding: 6px 12px calc(9px + env(safe-area-inset-bottom));
+  border-radius: 13.5px;
+  box-shadow: 0 5px 20px rgba(60, 46, 28, 0.22);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+  box-sizing: border-box;
+}
+
+/* 上面「平板限宽」那节给 .panel 的直接子块留了 max-width:460 + auto 外边距，
+   那是"通栏底板 + 居中内容列"的写法。控制台成了浮卡，内容要铺满卡面，这条撤掉 */
+.panel.compact > view {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* 行距改由 row-gap 统一管，各块自身的外边距一律归零 */
+.panel.compact .ctrl,
+.panel.compact .views,
+.panel.compact .bands { margin-top: 0; }
+.panel.compact .hint { margin: 0; }
+
+/* 触控目标跟着字号一起收一档：手机上 37.5px，平板上 31px，
+   再低就不好按了 */
+.panel.compact .tabs { padding: 2px; gap: 4px; }
+.panel.compact .tab { min-height: 29px; padding: 3px 0; font-size: 12.5px; letter-spacing: 1px; }
+.panel.compact .btn { min-height: 31px; padding: 4px 12px; font-size: 12px; }
+.panel.compact .chip { min-height: 27px; padding: 3.5px 9px; font-size: 10.5px; }
+.panel.compact .band { min-height: 24px; padding: 2px 1px; font-size: 9px; }
+.panel.compact .lab { font-size: 10.5px; min-width: 26px; }
+.panel.compact .val { font-size: 10px; min-width: 60px; }
+.panel.compact .hint { font-size: 9px; line-height: 1.45; }
+
+/* 滑块组件自带 40px 高，行高被它撑着。压扁版式里直接定死高度，
+   两根滑条才真矮下去 */
+.panel.compact slider { height: 28px; }
+
+/* 营造：模式切换和主控条并排一行，速度条和视图切换各占一行 */
+.panel.compact .tabs { flex: 0 0 148px; }
+.panel.compact .ctrl-main { flex: 1 1 240px; min-width: 0; }
+.panel.compact .ctrl-speed { flex: 0 0 100%; }
+.panel.compact .views { flex: 0 0 100%; }
+
+/* 滑块是组件，自带一个最小宽度。不放开 min-width 的话，
+   主控条会被滑块顶宽，整行挤不下就换行，版式又散 */
+.panel.compact .grow { min-width: 0; }
+
+/* 泄洪：水量条和水位尺都要满宽——尺子是照着滑块的流量刻度分的段，
+   两边宽度必须一致。视图切换没有滑块可对齐，挪到第一行跟模式切换并排 */
+.panel.flood.compact .tabs { order: -4; }
+.panel.flood.compact .views { order: -3; flex: 1 1 auto; }
+.panel.flood.compact .ctrl-q { order: -2; flex: 0 0 100%; }
+.panel.flood.compact .bands { order: -1; flex: 0 0 100%; }
