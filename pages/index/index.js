@@ -437,8 +437,14 @@ Page({
     srcOpen: false,
     quizOpen: false, quizIdx: 0, quizPick: null, quizDone: false,
     QUIZ: QUIZ,
-    // 顶部安全区，onLoad 里按状态栏 + 胶囊按钮量出来（px）。见 measureTop
-    topTitle: 64, topBtn: 120, topCard: 152, topCmp: 250
+    // 顶部安全区，onLoad 里按状态栏 + 胶囊按钮量出来（设计空间 px）。见 measureTop
+    topTitle: 64, topBtn: 120, topCard: 162, topCmp: 250,
+    // 覆盖层的设计空间与缩放比：整层按 390pt 排版，再 scale(k) 放到设备宽度
+    k: 1, cw: 390, ch: 844,
+    // 宽屏（平板）标记：控制台改用压扁版式，见 index.wxss 的「平板：控制台压扁」
+    compact: false,
+    // 考考你那张卡的高度上限：屏高的 70%，但要算在设计空间里
+    quizMaxH: 590
   },
 
   // ==================== 生命周期 ====================
@@ -465,18 +471,51 @@ Page({
     return top
   },
 
+  /**
+   * 量窗口，定下覆盖层的设计空间、缩放比，以及顶上四层的落位。
+   * onLoad 和 onResize（转屏）都走这一条路。
+   *
+   * 覆盖层一律按 390pt 宽（iPhone 12/13）排版，运行时整体缩到设备宽度。
+   * 缩放比封顶 1.3——iPad 上再放大的话，UI 就是"放大的手机"，
+   * 不如按原比例收在一根内容列里。
+   */
+  applySize() {
+    const wi = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+    const W = wi.windowWidth || 390
+    const H = wi.windowHeight || 844
+    const k = clamp(W / 390, 1, 1.3)
+    this.k = k
+    // 顶部四层的落位。层级之间用固定间距，改字号时才不用一处处重算：
+    // 抬头（含副题）≈ 56 px、右下角那枚「数据出处」≈ 26 px。
+    // measureTop 量的是设备像素，换算到设计空间要除以 k
+    const top = this.measureTop() / k
+    this.setData({
+      k,
+      cw: W / k,
+      ch: H / k,
+      // 设备宽过 468pt（约 k>=1.2）算平板：控制台从通栏底板改成居中浮卡，
+      // 内部由堆叠改成并排，压掉三成高度。手机上 k=1，版式一点不动
+      compact: k >= 1.2,
+      // 浮层被 scale(k) 放大过，vh 又按设备真高算，
+      // 卡片高度上限得先折回设计空间再给
+      quizMaxH: Math.round(H / k * 0.7),
+      topTitle: top,
+      topBtn: top + 56,      // 数据出处 / FPS，压在抬头右下
+      // 阶段卡要让开右上那一排按钮。按钮的实际高度是 39 px：
+      // min-height 落在内容盒上，再加上下 4 px 内边距和 1 px 边框。
+      // 早先按 32 px 排，卡片就压在按钮下沿上（手机上也是，只是没人在意）
+      topCard: top + 98,
+      // 敞肩对比卡只在泄洪模式出现，压在读数卡之下。
+      // 读数卡两行格子共 89 px 高，卡跟着阶段卡一起下移了 10 px，
+      // 这里也得跟着挪，否则两张卡会叠在一起（手机上原来差 3 px）
+      topCmp: top + 190
+    })
+  },
+
   onLoad() {
     this.st = { t: 0, q: Q_DEF }
     this.animT = 0      // 泄洪档位动画的相位钟：波线、流线、涟漪共用
-    // 顶部四层的落位。层级之间用固定间距，改字号时才不用一处处重算：
-    // 抬头（含副题）≈ 56 px、右下角那枚「数据出处」≈ 26 px
-    const top = this.measureTop()
-    this.setData({
-      topTitle: top,
-      topBtn: top + 56,      // 数据出处 / FPS，压在抬头右下
-      topCard: top + 88,     // 营造阶段卡 / 泄洪读数卡
-      topCmp: top + 180      // 敞肩对比卡（只在泄洪模式出现，压在读数卡之下）
-    })
+    this.applySize()
     // 开画就是建造模式，落在「营造」机位上，和 VIEWS.build 保持一致：
     // 高空斜俯看 28 道并列拱券，层次分明；正面平视时它们前后重叠
     const v0 = VIEWS.build
@@ -500,21 +539,58 @@ Page({
   },
 
   onReady() {
+    this.initCanvas(0)
+  },
+
+  onResize() {
+    // 平板转屏：窗口宽高换了，覆盖层的缩放比和画布都得跟着重算，
+    // 否则横过来还是竖屏那套，画面被拉变形
+    this.applySize()
+    this.initCanvas(0)
+  },
+
+  /**
+   * 取 canvas 节点，开画。
+   *
+   * iPad 上布局比手机慢，onReady 里量到的节点尺寸有时是 0。
+   * canvas 一旦按 0 宽高建好，后面画什么都是白画，整屏只剩底色——
+   * 这是平板上"看不见桥"的原因。量不到就隔一帧再量，最多试若干次；
+   * 试完还不行就报错，不装作没事。
+   *
+   * 画布按设计空间（cw×ch）画，再整体放大到设备像素：
+   * 逻辑尺寸是设计尺寸，放大系数 = 设备像素 / 逻辑像素。
+   * 这样标注字号、三维机位跟覆盖层用的是同一把尺子。
+   */
+  initCanvas(tries) {
+    // 上一轮画布（若有）先停掉：tick 开头就 return，不会再排下一帧
+    this.running = false
     const q = wx.createSelectorQuery()
     q.select('#gl').fields({ node: true, size: true }).exec((res) => {
       const r = res && res[0]
-      if (!r || !r.node) return
+      // 量不到，或者量到的是还没跟上新窗口的旧尺寸，都再等一帧
+      const stale = r && r.width && r.height &&
+        Math.abs(r.width / r.height - this.data.cw / this.data.ch) > 0.03
+      if (!r || !r.node || !r.width || !r.height || stale) {
+        if (tries < 12) {
+          setTimeout(() => this.initCanvas(tries + 1), 50)
+          return
+        }
+        console.error('canvas 没拿到节点，画不了', res)
+        return
+      }
       const canvas = r.node
       const dpr = (wx.getWindowInfo ? wx.getWindowInfo().pixelRatio : 2) || 2
+      const sx = r.width / this.data.cw
+      const sy = r.height / this.data.ch
       canvas.width = Math.round(r.width * dpr)
       canvas.height = Math.round(r.height * dpr)
       const ctx = canvas.getContext('2d')
-      ctx.scale(dpr, dpr)
+      ctx.scale(sx * dpr, sy * dpr)
 
       this.canvas = canvas
       this.ctx = ctx
-      this.cw = r.width
-      this.ch = r.height
+      this.cw = this.data.cw
+      this.ch = this.data.ch
       this.scene = R.createScene()
 
       // 场景只搭一次，之后每帧只做投影
@@ -524,6 +600,7 @@ Page({
 
       this.initParticles()
       this._ready = true
+      this.running = true
       this.tick = this.tick.bind(this)
       canvas.requestAnimationFrame(this.tick)
     })
@@ -673,11 +750,29 @@ Page({
     if (an.t >= 1) this.anim = null
   },
 
-  /** 观察距离。桥全长 64.4 m，按视锥自动退到能装下的距离 */
+  /**
+   * 观察距离。桥全长 64.4 m，按视锥自动退到能装下的距离。
+   *
+   * 取景的尺子不是"固定多少米"，而是"每个设计像素摊到多少米"：
+   * 手机上是 74 m 铺满 390 pt 宽，即 0.19 m/px。
+   * 平板的设计空间更宽更高（820 pt 的 iPad 设计空间 631x908），
+   * 换算下来纵横两向要的米数都比手机多——同一把尺子，
+   * 桥在屏上的大小跟手机一致，四周只是多看到些地景。
+   *
+   * 早先这里写死"横向必须装下 74 m"，纵向就没人管了：
+   * 手机竖屏纵向能摊到 160 m，平板竖屏只剩 106 m，
+   * 斜着看过去桥就从画里切出去了。
+   */
   camDist(zoom) {
+    const t = Math.tan(38 * Math.PI / 360)
+    const mpp = 74 / 390            // 米 / 设计像素，手机上的取景基准
+    const halfW = mpp * this.cw / 2
+    const halfH = mpp * this.ch / 2
     const aspect = this.cw / Math.max(1, this.ch)
-    const need = 74
-    const base = need / (2 * Math.tan(38 * Math.PI / 360) * Math.max(0.34, Math.min(aspect, 1.9)))
+    const base = Math.max(
+      halfW / (t * Math.max(0.34, Math.min(aspect, 1.9))),
+      halfH / t
+    )
     return clamp(base * zoom, 26, 340)
   },
 

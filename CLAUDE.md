@@ -56,7 +56,10 @@ ZhaozhouBridge/
 ### WXSS
 - 盒模型、flex 布局可用。
 - **不要用** CSS 变量、`@media`、`gap`（兼容性看基础库，能用 flex 间距代替就代替）、CSS 动画复杂关键帧（用 canvas 自己画动画帧更稳）。
-- 尺寸单位用 `rpx`（响应式像素），不是 `px`。
+- 尺寸单位用 `px`，不用 `rpx`。这一层浮层（`pages/index/index.wxml` 里 `.chrome` 包着的那一块）按 **390 pt 宽的设计空间**排版，运行时整体 `transform: scale(k)` 放大到设备宽度，`k = clamp(windowWidth / 390, 1, 1.3)`，在 `index.js` 的 `applySize()` 里算。
+  为什么不用 `rpx`：`1rpx = 视口宽 / 750`，iPad 竖屏 820 pt 上就是 1.09 px，手机上只有 0.52 px——浮层会整体涨到两倍多，而 canvas 里的标注、三维机位都是死像素，两边尺度对不上，比例就散了（标题压副题、卡片压按钮、控制台吃掉半屏）。
+  代价是 `vh` 也不能用了：`vh` 按设备真高算，放大之后 70vh 会变成九成屏高。凡是随视口变的量（卡片高度上限之类），都在 JS 里按设计空间算好再走行内 style。
+- 宽屏版式不走 `@media`：`index.js` 的 `applySize()` 按缩放比给元素加类名（设备宽过 468pt 就给底部控制台加 `.compact`），宽屏专用的写法集中放在 `index.wxss` 末尾「平板：控制台压扁」一节。手机上 k=1，这一节一条也不生效。
 
 ### JS（Page 构造器）
 - 页面逻辑写在 `Page({ data: {}, onLoad() {}, ... })` 里。
@@ -106,7 +109,8 @@ ZhaozhouBridge/
 
 - 运行报错去微信开发者工具的 Console 面板看，错误信息会带 `WAService.js` / `WKWebView` 前缀。
 - 如果报 `xxx is not a function`，先怀疑是 API 名写错了——以微信官方文档为准，不要凭训练记忆补全。
-- 模拟器选 iPhone 12/13，rpx 换算以这个宽度为基准。
+- 模拟器选 iPhone 12/13，设计空间（390 pt）以这个宽度为基准；改样式后拿 iPad 竖屏（820×1180）也过一遍，两边的比例要一样。
+- canvas 里的坐标也是设计空间的：`this.cw / this.ch` 是设计尺寸，绘制时用 `ctx.scale(k * dpr)` 放到设备像素。这样标注字号和浮层用同一把尺子。
 
 ## 9. 提交前自检
 
