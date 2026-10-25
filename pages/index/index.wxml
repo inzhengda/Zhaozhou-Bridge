@@ -18,18 +18,18 @@
 
   <!-- 抬头。四个顶层的 top 都由 index.js 的 measureTop() 量出来，
        写死 rpx 会顶在状态栏和右上角胶囊按钮上 -->
-  <view class="title" style="top:{{topTitle}}px">
+  <view class="title" wx:if="{{tour === null}}" style="top:{{topTitle}}px">
     <view class="title-main">赵州桥</view>
     <view class="title-sub">隋 · 大业年间 595—605 · 匠人李春</view>
   </view>
-  <view class="topbtns" style="top:{{topBtn}}px">
+  <view class="topbtns" wx:if="{{tour === null}}" style="top:{{topBtn}}px">
     <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onTourOpen">导览</view>
     <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onToggleSec">剖面图</view>
     <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onToggleSrc">数据出处</view>
     <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onQuizOpen">考考你</view>  </view>
 
   <!-- 营造阶段卡。剖面图铺开时这三张卡一概让位，不然和剖面挤在一起 -->
-  <view class="phase" wx:if="{{mode === 'build' && !sec && !focus}}" style="top:{{topCard}}px">
+  <view class="phase" wx:if="{{mode === 'build' && !sec && !focus && tour === null}}" style="top:{{topCard}}px">
     <view class="phase-name">{{phaseName}}</view>
     <view class="phase-desc">{{phaseDesc}}</view>
     <view class="bar"><view class="bar-fill" style="width:{{progressPct}}%"></view></view>
@@ -39,8 +39,10 @@
     </view>
   </view>
 
-  <!-- 泄洪读数 -->
-  <view class="hud" wx:if="{{mode === 'flood' && !sec && !focus}}" style="top:{{topCard}}px">
+  <!-- 泄洪读数。导览期间不收：第七步讲稿明说「读数卡上的数随水量变」，
+       收了就没东西可指。改挂到屏幕底部，把画面中段整片让给桥 -->
+  <view class="hud {{tour !== null ? 'hud-low' : ''}}" wx:if="{{mode === 'flood' && !sec && !focus}}"
+        style="{{tour !== null ? '' : 'top:' + topCard + 'px'}}">
     <view class="hud-row">
       <view class="cell">
         <view class="cell-v">{{readout.h}}</view>
@@ -85,29 +87,38 @@
   <!-- 敞肩 / 实肩 对比。左栏是此刻的水力对比，右栏是四个小拱静态的
        省料账，最后一行横跨两栏。八行竖排要 190 px 高，会压到桥面上——
        竖屏上半只有 300 px 可用（桥顶在 390 px 上下），分两栏才收得进 -->
-  <view class="cmp" wx:if="{{mode === 'flood' && open && !sec && !focus}}" style="top:{{topCmp}}px">
-    <view class="cmp-row">
-      <view class="cmp-col">
-        <view class="cmp-title">敞肩之利（相对实肩拱）</view>
-        <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
-        <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
-        <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+  <view class="cmp {{showCmp ? '' : 'cmp-folded'}}" wx:if="{{mode === 'flood' && open && !sec && !focus && tour === null}}" style="top:{{topCmp}}px">
+    <!-- 收起时只剩一枚小药丸，原地留着，想看再点回来。卡片本身从两百
+         像素高的一条压到二十几像素，桥面上那两排孔洞就露出来了 -->
+    <view class="cmp-fold" wx:if="{{!showCmp}}" hover-class="pressed" aria-role="button" bindtap="onToggleCmp">敞肩对比 · 展开</view>
+    <block wx:else>
+      <!-- 角上这一枚「隐藏」把整张卡收走。敞肩拱一打开，两侧那两排孔洞
+           就露在卡片底下那块地方，卡不收就只看得见一半的洞 -->
+      <text class="cmp-close" aria-role="button" bindtap="onToggleCmp">隐藏</text>
+      <view class="cmp-row">
+        <view class="cmp-col">
+          <view class="cmp-title">敞肩之利（相对实肩拱）</view>
+          <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
+          <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
+          <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+        </view>
+        <view class="cmp-col">
+          <view class="cmp-title">四小拱凿掉的石方</view>
+          <view class="cmp-line">全孔断面 <text class="hl">{{sp.voidArea}} m²</text></view>
+          <view class="cmp-line">占拱肩 <text class="hl">{{sp.share}}%</text></view>
+          <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
+        </view>
       </view>
-      <view class="cmp-col">
-        <view class="cmp-title">四小拱凿掉的石方</view>
-        <view class="cmp-line">全孔断面 <text class="hl">{{sp.voidArea}} m²</text></view>
-        <view class="cmp-line">占拱肩 <text class="hl">{{sp.share}}%</text></view>
-        <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
-      </view>
-    </view>
-    <!-- 「同一水位下」这半句不能省。敞肩桥过同样的流量水位本来就低些，
-         若拿两座桥各自的水位去比，差数只剩一小半（900 m³/s 下 17 → 7）。
-         剖面图那两张（过水断面、敞肩对照）走的是同一个定义，三处才对得上 -->
-    <view class="cmp-line cmp-wide">此刻小拱：<text class="hl">{{sp.flowing}}</text>，同一水位下多让出 <text class="hl">{{sp.nowArea}} m²</text></view>
+      <!-- 「同一水位下」这半句不能省。敞肩桥过同样的流量水位本来就低些，
+           若拿两座桥各自的水位去比，差数只剩一小半（900 m³/s 下 17 → 7）。
+           剖面图那两张（过水断面、敞肩对照）走的是同一个定义，三处才对得上 -->
+      <view class="cmp-line cmp-wide">此刻小拱：<text class="hl">{{sp.flowing}}</text>，同一水位下多让出 <text class="hl">{{sp.nowArea}} m²</text></view>
+    </block>
   </view>
 
-  <!-- 底部控制台 -->
-  <view class="panel {{mode}} {{compact ? 'compact' : ''}}">
+  <!-- 底部控制台。导览进行中收起：讲稿卡挪到顶部以后，控制台留在底下
+       就跟导览步骤抢注意力，录屏时也不该有可点的按钮晃眼 -->
+  <view class="panel {{mode}} {{compact ? 'compact' : ''}}" wx:if="{{tour === null}}">
     <view class="tabs">
       <view class="tab {{mode === 'build' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-mode="build" bindtap="onTab">营 造</view>
       <view class="tab {{mode === 'flood' ? 'on' : ''}}" hover-class="pressed" aria-role="button" data-mode="flood" bindtap="onTab">泄 洪</view>
@@ -183,9 +194,11 @@
     </block>
   </view>
 
-  <!-- 说课导览。盖在控制台之上：导览进行中只留上一步/下一步，其余控件先收起，
-       避免和底部按钮抢屏幕。写在 panel 之后，同级绝对定位按书写次序叠放 -->
-  <view class="tour" wx:if="{{tour !== null}}">
+  <!-- 说课导览。挂在画面顶部：讲稿是这轮的主角，得占住视线。
+       抬头、右上角按钮、阶段卡在导览期间一并收起（讲稿占了顶部这一带，
+       压在底下只是叠字），泄洪读数退到屏幕底部。top 走 topTitle，
+       让开状态栏和右上角的胶囊按钮 -->
+  <view class="tour" wx:if="{{tour !== null}}" style="top:{{topTitle}}px">
     <view class="tour-head">
       <view class="tour-step">{{tourIdx + 1}} / {{tourTotal}}</view>
       <view class="tour-name">{{tourName}}</view>
@@ -198,31 +211,40 @@
     </view>
   </view>
 
-  <!-- 考考你 -->
+  <!-- 考考你。遮罩压暗整屏，卡片由外层容器做垂直居中：
+       整层浮层被 scale(k) 放大过，vh 和百分比都对不齐，
+       居中交给 flex，位置不会飘 -->
   <view class="quiz-mask" wx:if="{{quizOpen}}" bindtap="onQuizClose"></view>
-  <view class="quiz" wx:if="{{quizOpen}}" style="top:{{topTitle}}px;max-height:{{quizMaxH}}px">
+  <view class="quiz-wrap" wx:if="{{quizOpen}}">
+  <view class="quiz" style="max-height:{{quizMaxH}}px">
     <view class="quiz-head">
       <text class="quiz-title">考考你</text>
       <text class="quiz-close" aria-role="button" bindtap="onQuizClose">关闭</text>
     </view>
-    <block wx:if="{{!quizDone}}">
-      <view class="quiz-progress">{{quizIdx + 1}} / {{QUIZ.length}}</view>
-      <view class="quiz-q">{{QUIZ[quizIdx].q}}</view>
-      <view class="quiz-opts">
-        <view
-          class="quiz-opt {{quizPick === i ? (i === QUIZ[quizIdx].a ? 'right' : 'wrong') : ''}}"
-          wx:for="{{QUIZ[quizIdx].opts}}" wx:for-item="opt" wx:for-index="i" wx:key="*this"
-          hover-class="pressed" aria-role="button"
-          data-i="{{i}}" bindtap="onQuizPick"
-        >{{opt}}</view>
-      </view>
-      <view class="quiz-why" wx:if="{{quizPick !== null}}">{{QUIZ[quizIdx].why}}</view>
-      <view class="quiz-next" wx:if="{{quizPick !== null}}" hover-class="pressed" bindtap="onQuizNext">{{quizIdx + 1 < QUIZ.length ? '下一题' : '完成'}}</view>
-    </block>
-    <block wx:else>
-      <view class="quiz-done">五题完成！回到场景里再看看：四孔小拱的位置和过水次序，28 道券怎么一层层收分挤紧，敞肩拱比实肩拱多让出多少过水面积。</view>
-      <view class="quiz-restart" hover-class="pressed" bindtap="onQuizRestart">再来一次</view>
-    </block>
+    <view class="quiz-body">
+      <block wx:if="{{!quizDone}}">
+        <view class="quiz-progress">{{quizIdx + 1}} / {{QUIZ.length}}</view>
+        <view class="quiz-q">{{QUIZ[quizIdx].q}}</view>
+        <view class="quiz-opts">
+          <view
+            class="quiz-opt {{quizPick === i ? (i === QUIZ[quizIdx].a ? 'right' : 'wrong') : ''}}"
+            wx:for="{{QUIZ[quizIdx].opts}}" wx:for-item="opt" wx:for-index="i" wx:key="*this"
+            hover-class="pressed" aria-role="button"
+            data-i="{{i}}" bindtap="onQuizPick"
+          >{{opt}}</view>
+        </view>
+        <view class="quiz-why" wx:if="{{quizPick !== null}}">
+          <view class="quiz-why-tag">为什么</view>
+          <text>{{QUIZ[quizIdx].why}}</text>
+        </view>
+        <view class="quiz-next" wx:if="{{quizPick !== null}}" hover-class="pressed" bindtap="onQuizNext">{{quizIdx + 1 < QUIZ.length ? '下一题' : '完成'}}</view>
+      </block>
+      <block wx:else>
+        <view class="quiz-done">五题完成！回到场景里再看看：四孔小拱的位置和过水次序，28 道券怎么一层层收分挤紧，敞肩拱比实肩拱多让出多少过水面积。</view>
+        <view class="quiz-restart" hover-class="pressed" bindtap="onQuizRestart">再来一次</view>
+      </block>
+    </view>
+  </view>
   </view>
 
   <!-- 史料出处。必须放在最后：这一层要盖住上面的读数卡和控制台，
