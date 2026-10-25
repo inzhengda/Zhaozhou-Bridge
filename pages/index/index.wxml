@@ -85,25 +85,33 @@
   <!-- 敞肩 / 实肩 对比。左栏是此刻的水力对比，右栏是四个小拱静态的
        省料账，最后一行横跨两栏。八行竖排要 190 px 高，会压到桥面上——
        竖屏上半只有 300 px 可用（桥顶在 390 px 上下），分两栏才收得进 -->
-  <view class="cmp" wx:if="{{mode === 'flood' && open && !sec && !focus}}" style="top:{{topCmp}}px">
-    <view class="cmp-row">
-      <view class="cmp-col">
-        <view class="cmp-title">敞肩之利（相对实肩拱）</view>
-        <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
-        <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
-        <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+  <view class="cmp {{showCmp ? '' : 'cmp-folded'}}" wx:if="{{mode === 'flood' && open && !sec && !focus}}" style="top:{{topCmp}}px">
+    <!-- 收起时只剩一枚小药丸，原地留着，想看再点回来。卡片本身从两百
+         像素高的一条压到二十几像素，桥面上那两排孔洞就露出来了 -->
+    <view class="cmp-fold" wx:if="{{!showCmp}}" hover-class="pressed" aria-role="button" bindtap="onToggleCmp">敞肩对比 · 展开</view>
+    <block wx:else>
+      <!-- 角上这一枚「隐藏」把整张卡收走。敞肩拱一打开，两侧那两排孔洞
+           就露在卡片底下那块地方，卡不收就只看得见一半的洞 -->
+      <text class="cmp-close" aria-role="button" bindtap="onToggleCmp">隐藏</text>
+      <view class="cmp-row">
+        <view class="cmp-col">
+          <view class="cmp-title">敞肩之利（相对实肩拱）</view>
+          <view class="cmp-line">过水面积增大约 <text class="hl">{{diff.areaPct}}%</text></view>
+          <view class="cmp-line">水流冲击力降低 <text class="hl">{{diff.forcePct}}%</text></view>
+          <view class="cmp-line">上游壅水降低 <text class="hl">{{diff.hDown}} m</text></view>
+        </view>
+        <view class="cmp-col">
+          <view class="cmp-title">四小拱凿掉的石方</view>
+          <view class="cmp-line">全孔断面 <text class="hl">{{sp.voidArea}} m²</text></view>
+          <view class="cmp-line">占拱肩 <text class="hl">{{sp.share}}%</text></view>
+          <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
+        </view>
       </view>
-      <view class="cmp-col">
-        <view class="cmp-title">四小拱凿掉的石方</view>
-        <view class="cmp-line">全孔断面 <text class="hl">{{sp.voidArea}} m²</text></view>
-        <view class="cmp-line">占拱肩 <text class="hl">{{sp.share}}%</text></view>
-        <view class="cmp-line">少砌石 <text class="hl">{{sp.voidVol}} m³</text>（{{sp.stone}} 吨）</view>
-      </view>
-    </view>
-    <!-- 「同一水位下」这半句不能省。敞肩桥过同样的流量水位本来就低些，
-         若拿两座桥各自的水位去比，差数只剩一小半（900 m³/s 下 17 → 7）。
-         剖面图那两张（过水断面、敞肩对照）走的是同一个定义，三处才对得上 -->
-    <view class="cmp-line cmp-wide">此刻小拱：<text class="hl">{{sp.flowing}}</text>，同一水位下多让出 <text class="hl">{{sp.nowArea}} m²</text></view>
+      <!-- 「同一水位下」这半句不能省。敞肩桥过同样的流量水位本来就低些，
+           若拿两座桥各自的水位去比，差数只剩一小半（900 m³/s 下 17 → 7）。
+           剖面图那两张（过水断面、敞肩对照）走的是同一个定义，三处才对得上 -->
+      <view class="cmp-line cmp-wide">此刻小拱：<text class="hl">{{sp.flowing}}</text>，同一水位下多让出 <text class="hl">{{sp.nowArea}} m²</text></view>
+    </block>
   </view>
 
   <!-- 底部控制台 -->

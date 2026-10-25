@@ -46,7 +46,7 @@ page {
 }
 
 .src-btn, .tab, .btn, .chip, .band, .tour-btn, .tour-exit, .focus-close,
-.src-close, .src-tab, .quiz-close, .quiz-opt, .quiz-next, .quiz-restart,
+.src-close, .src-tab, .quiz-close, .quiz-opt, .quiz-next, .quiz-restart, .cmp-close, .cmp-fold,
 .quiz, .quiz-mask, .src, .src-mask, .panel, .phase, .hud, .cmp, .focus, .tour {
   pointer-events: auto;
 }
@@ -360,6 +360,41 @@ page {
   box-shadow: 0 3px 11.5px rgba(60, 46, 28, 0.13);
 }
 
+/* 收起态：整张卡塌掉，只在原地留一枚小药丸。卡面、边框、阴影
+   全撤掉，露出底下的桥面和两侧那两排小拱的孔洞。想看回来点一下
+   药丸就行，不用去别处翻开关 */
+.cmp-folded {
+  left: auto;
+  right: 17.5px;
+  padding: 0;
+  background: none;
+  border-left: none;
+  box-shadow: none;
+}
+
+.cmp-fold {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  font-size: 10px;
+  color: #8e3b26;
+  border-radius: 9px;
+  background: rgba(252, 248, 240, 0.9);
+  border: 0.5px solid rgba(158, 132, 96, 0.34);
+}
+
+/* 右上角那一枚「隐藏」。压在右栏标题右边，不占竖向空间——
+   这张卡已经贴着桥面了，每多一行高都往桥身上压一分 */
+.cmp-close {
+  position: absolute;
+  right: 10.5px;          /* 与卡内文字的 10.5 px 左右留白对齐 */
+  top: 4px;
+  font-size: 11.5px;
+  color: #8e3b26;
+  padding: 2px 6px;
+}
+
 /* 两栏并排。左栏「此刻的水力对比」、右栏「静态的省料账」，
    原来竖排成八行，高度顶到桥面上去了 */
 .cmp-row {
@@ -659,7 +694,7 @@ page {
    回弹都看得见。触控高度同步抬到 28–40 px——教学场景老人小孩都在用，
    误触比按钮走形更伤体验 */
 
-.src-btn, .tab, .btn, .chip, .band, .tour-btn, .tour-exit, .focus-close, .src-close, .src-tab {
+.src-btn, .tab, .btn, .chip, .band, .tour-btn, .tour-exit, .focus-close, .src-close, .src-tab, .cmp-close, .cmp-fold {
   transition: transform 0.12s ease, opacity 0.12s ease;
 }
 
