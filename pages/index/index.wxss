@@ -322,6 +322,13 @@ page {
   box-shadow: 0 3px 12.5px rgba(14, 22, 32, 0.26);
 }
 
+/* 导览态：读数卡从顶部挪到底部。讲稿横幅占了顶部一百八十几像素，
+   读数卡要是还钉在原来的 top，中间那两行小拱——正是第三步要讲的东西——
+   就全被压在卡底下了。挪到底边，桥留在画面当中，讲稿在上、读数在下 */
+.hud-low {
+  bottom: calc(20px + env(safe-area-inset-bottom));
+}
+
 .hud-row {
   display: flex;
 }
@@ -607,19 +614,20 @@ page {
 
 /* ---------- 说课导览 ---------- */
 
-/* 盖在底部控制台之上的讲稿卡。九步里每步的机位、模式、开关都由
-   applyTourStep 摆好，录屏时只需点"下一步"。上边一道朱红压边，
-   和普通控制台一眼区分开 */
+/* 讲稿卡。挂在画面顶部：导览讲的是这一步要讲的话，视线得先落在它身上，
+   压在一堆控件底下是讲不下去的。九步里每步的机位、模式、开关都由
+   applyTourStep 摆好，录屏时只需点"下一步"。下边一道朱红压边，
+   和普通控制台一眼区分开。top 由 index.js 的 topTitle 给，
+   让开状态栏和右上角胶囊按钮 */
 .tour {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  padding: 9.5px 15.5px calc(11.5px + env(safe-area-inset-bottom));
-  border-radius: 13.5px 13.5px 0 0;
-  border-top: 2.5px solid #c4563a;
+  padding: 11.5px 15.5px 13.5px;
+  border-radius: 0 0 13.5px 13.5px;
+  border-bottom: 2.5px solid #c4563a;
   background: rgba(252, 248, 240, 0.97);
-  box-shadow: 0 -3px 15.5px rgba(60, 46, 28, 0.18);
+  box-shadow: 0 3px 15.5px rgba(60, 46, 28, 0.18);
 }
 
 .tour-head {
@@ -629,9 +637,9 @@ page {
 
 .tour-step {
   flex-shrink: 0;
-  padding: 2px 8.5px;
+  padding: 3px 9.5px;
   border-radius: 519.5px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: #fdf6ec;
   background: #c4563a;
@@ -639,8 +647,8 @@ page {
 
 .tour-name {
   flex: 1;
-  margin-left: 8.5px;
-  font-size: 14px;
+  margin-left: 9.5px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: 1px;
   color: #8e3b26;
@@ -648,28 +656,28 @@ page {
 
 .tour-exit {
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: 13px;
   color: rgba(43, 39, 35, 0.55);
   padding: 3px 6px;
 }
 
 .tour-text {
-  margin-top: 6px;
-  font-size: 11px;
-  line-height: 1.6;
-  color: rgba(43, 39, 35, 0.78);
+  margin-top: 7.5px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: rgba(43, 39, 35, 0.82);
 }
 
 .tour-btns {
   display: flex;
-  margin-top: 8.5px;
+  margin-top: 10.5px;
 }
 
 .tour-btn {
   flex: 1;
   text-align: center;
-  padding: 7.5px 0;
-  font-size: 12.5px;
+  padding: 9px 0;
+  font-size: 14.5px;
   border-radius: 5px;
   color: #8e3b26;
   background: rgba(196, 86, 58, 0.13);
@@ -708,25 +716,29 @@ page {
 .btn { min-height: 37.5px; display: flex; align-items: center; justify-content: center; }
 .chip { min-height: 33.5px; display: flex; align-items: center; justify-content: center; }
 .band { min-height: 29px; display: flex; align-items: center; justify-content: center; }
-.tour-btn { min-height: 41.5px; display: flex; align-items: center; justify-content: center; }
+.tour-btn { min-height: 45.5px; display: flex; align-items: center; justify-content: center; }
 
 /* 考考你。跟「数据出处」同一套纸面语言：米色底、朱红强调、细描边。
    早先这里是块纯黑卡片，和整个页面的暖调完全不是一回事，一打开就跳出来 */
-.quiz-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(30, 26, 22, 0.42); z-index: 98; }
+.quiz-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(30, 26, 22, 0.5); z-index: 98; }
+/* 居中容器。整块浮层是 scale(k) 放大过的，vh 和百分比都对不齐，
+   垂直居中交给 flex，卡片位置不会飘。
+   容器不吃事件：点在卡片外的地方要落到下面的遮罩上（关掉问答） */
+.quiz-wrap { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 99; display: flex; align-items: center; justify-content: center; padding: 0 15.5px; pointer-events: none; }
 /* 最高多少：不能写 70vh。整块浮层是 scale(k) 放大过的，
    vh 又是按设备真高算的，70vh 会被放大成九成屏高。
    高度由 index.js 按设计空间算好，走行内 style */
-.quiz { position: fixed; left: 15.5px; right: 15.5px; z-index: 99; background: #fcf8f0; border-radius: 9.5px; box-shadow: 0 6px 23px rgba(40, 30, 18, 0.3); overflow-y: auto; }
+.quiz { position: relative; width: 100%; max-width: 460px; box-sizing: border-box; background: #fcf8f0; border-radius: 13.5px; box-shadow: 0 10px 34px rgba(40, 30, 18, 0.36); overflow-y: auto; pointer-events: auto; }
 
-.quiz-head { display: flex; justify-content: space-between; align-items: center; padding: 11.5px 14.5px 8.5px; border-bottom: 0.5px solid rgba(158, 132, 96, 0.26); }
-.quiz-title { font-size: 14px; font-weight: 600; letter-spacing: 1.5px; color: #2b2723; }
-.quiz-close { font-size: 11.5px; color: #8e3b26; padding: 2px 6px; }
+.quiz-head { display: flex; justify-content: space-between; align-items: center; padding: 13.5px 16.5px 10px; border-bottom: 0.5px solid rgba(158, 132, 96, 0.26); }
+.quiz-title { font-size: 16px; font-weight: 600; letter-spacing: 1.5px; color: #2b2723; }
+.quiz-close { font-size: 13px; color: #8e3b26; padding: 2px 6px; }
 
-.quiz-body { padding: 10.5px 14.5px 14.5px; }
-.quiz-progress { font-size: 11.5px; letter-spacing: 1px; color: rgba(43, 39, 35, 0.5); margin-bottom: 6px; }
-.quiz-q { font-size: 14.5px; line-height: 1.6; color: #2b2723; margin-bottom: 9.5px; }
-.quiz-opts { display: flex; flex-direction: column; gap: 5px; }
-.quiz-opt { padding: 8.5px 10.5px; border: 0.5px solid rgba(158, 132, 96, 0.26); border-radius: 4px; background: rgba(158, 132, 96, 0.14); font-size: 13.5px; color: rgba(43, 39, 35, 0.82); }
+.quiz-body { padding: 13px 16.5px 16.5px; }
+.quiz-progress { font-size: 12.5px; letter-spacing: 1px; color: rgba(43, 39, 35, 0.5); margin-bottom: 7px; }
+.quiz-q { font-size: 17px; line-height: 1.6; color: #2b2723; margin-bottom: 11.5px; }
+.quiz-opts { display: flex; flex-direction: column; gap: 7px; }
+.quiz-opt { padding: 10.5px 12px; border: 0.5px solid rgba(158, 132, 96, 0.26); border-radius: 5px; background: rgba(158, 132, 96, 0.14); font-size: 15px; color: rgba(43, 39, 35, 0.82); }
 /* 答对是苔绿，答错是朱红系，都用浅底 + 同色描边 + 同色字。
    四个选项并排时，眼睛先扫到底色那一层，色块比文字重，更容易定位 */
 .quiz-opt.right { border-color: rgba(85, 112, 60, 0.55); color: #55703c; background: rgba(85, 112, 60, 0.12); }
@@ -734,12 +746,12 @@ page {
 
 /* 讲解块跟出处面板里的注释块一个路子：浅底圆角块。
    「为什么」用朱红小标题，跟 .src-group 的分组标题一个路子 */
-.quiz-why { margin-top: 9.5px; padding: 8.5px 10.5px; background: rgba(158, 132, 96, 0.14); border-radius: 4px; font-size: 12.5px; line-height: 1.7; color: rgba(43, 39, 35, 0.78); }
-.quiz-why-tag { font-size: 11px; font-weight: 600; letter-spacing: 1px; color: #8e3b26; margin-bottom: 3px; }
+.quiz-why { margin-top: 11.5px; padding: 10.5px 12px; background: rgba(158, 132, 96, 0.14); border-radius: 5px; font-size: 13.5px; line-height: 1.7; color: rgba(43, 39, 35, 0.78); }
+.quiz-why-tag { font-size: 12px; font-weight: 600; letter-spacing: 1px; color: #8e3b26; margin-bottom: 3px; }
 
-.quiz-next { margin-top: 10.5px; text-align: center; padding: 9px; border-radius: 4px; background: #8e3b26; color: #fdf6ec; font-size: 14px; letter-spacing: 2px; }
-.quiz-done { font-size: 13.5px; line-height: 1.8; color: rgba(43, 39, 35, 0.78); margin-bottom: 10.5px; }
-.quiz-restart { text-align: center; padding: 8.5px; border: 0.5px solid rgba(158, 132, 96, 0.42); border-radius: 4px; background: rgba(158, 132, 96, 0.14); color: #2b2723; font-size: 13.5px; }
+.quiz-next { margin-top: 12.5px; text-align: center; padding: 11px; border-radius: 5px; background: #8e3b26; color: #fdf6ec; font-size: 15px; letter-spacing: 2px; }
+.quiz-done { font-size: 14.5px; line-height: 1.8; color: rgba(43, 39, 35, 0.78); margin-bottom: 11.5px; }
+.quiz-restart { text-align: center; padding: 10.5px; border: 0.5px solid rgba(158, 132, 96, 0.42); border-radius: 5px; background: rgba(158, 132, 96, 0.14); color: #2b2723; font-size: 14.5px; }
 
 /* ==================== 平板限宽 ====================
    iPad 上画布比手机宽两倍多，卡片和控制台跟着拉满就散了：
