@@ -322,13 +322,6 @@ page {
   box-shadow: 0 3px 12.5px rgba(14, 22, 32, 0.26);
 }
 
-/* 导览态：读数卡从顶部挪到底部。讲稿横幅占了顶部一百八十几像素，
-   读数卡要是还钉在原来的 top，中间那两行小拱——正是第三步要讲的东西——
-   就全被压在卡底下了。挪到底边，桥留在画面当中，讲稿在上、读数在下 */
-.hud-low {
-  bottom: calc(20px + env(safe-area-inset-bottom));
-}
-
 .hud-row {
   display: flex;
 }
@@ -614,20 +607,20 @@ page {
 
 /* ---------- 说课导览 ---------- */
 
-/* 讲稿卡。挂在画面顶部：导览讲的是这一步要讲的话，视线得先落在它身上，
-   压在一堆控件底下是讲不下去的。九步里每步的机位、模式、开关都由
-   applyTourStep 摆好，录屏时只需点"下一步"。下边一道朱红压边，
-   和普通控制台一眼区分开。top 由 index.js 的 topTitle 给，
-   让开状态栏和右上角胶囊按钮 */
+/* 讲稿卡。盖在底部控制台之上：导览讲的是这一步要讲的话，讲稿待在下缘
+   正好是提词的位置，视线不用来回找。九步里每步的机位、模式、开关都由
+   applyTourStep 摆好，录屏时只需点"下一步"。上边一道朱红压边，
+   和普通控制台一眼区分开。导览期间控制台收起，讲稿顶上它的位置 */
 .tour {
   position: absolute;
   left: 0;
   right: 0;
-  padding: 11.5px 15.5px 13.5px;
-  border-radius: 0 0 13.5px 13.5px;
-  border-bottom: 2.5px solid #c4563a;
+  bottom: 0;
+  padding: 11.5px 15.5px calc(13.5px + env(safe-area-inset-bottom));
+  border-radius: 13.5px 13.5px 0 0;
+  border-top: 2.5px solid #c4563a;
   background: rgba(252, 248, 240, 0.97);
-  box-shadow: 0 3px 15.5px rgba(60, 46, 28, 0.18);
+  box-shadow: 0 -3px 15.5px rgba(60, 46, 28, 0.18);
 }
 
 .tour-head {
@@ -671,21 +664,29 @@ page {
 .tour-btns {
   display: flex;
   margin-top: 10.5px;
+  justify-content: flex-end;
 }
 
+/* 按钮按内容宽排，右对齐收在卡里。原先两枚各占半屏宽，
+   「上一步」四个字摊在两百像素上，既不雅观，也把讲稿挤窄了 */
 .tour-btn {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 92px;
   text-align: center;
-  padding: 9px 0;
+  padding: 9px 20px;
   font-size: 14.5px;
   border-radius: 5px;
   color: #8e3b26;
   background: rgba(196, 86, 58, 0.13);
 }
 
-/* WXSS 拿不到 :last-child，右距只写在"上一步"这一枚上 */
+/* 次要动作描边处理：主按钮实心朱红，次按钮只留一圈朱红边。
+   两枚一实一虚，主次一眼分得清 */
 .tour-btn.prev {
-  margin-right: 7.5px;
+  margin-right: 9.5px;
+  color: #8e3b26;
+  background: transparent;
+  border: 1px solid rgba(196, 86, 58, 0.45);
 }
 
 .tour-btn.off {

@@ -28,8 +28,10 @@
     <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onToggleSrc">数据出处</view>
     <view class="src-btn" hover-class="pressed" aria-role="button" bindtap="onQuizOpen">考考你</view>  </view>
 
-  <!-- 营造阶段卡。剖面图铺开时这三张卡一概让位，不然和剖面挤在一起 -->
-  <view class="phase" wx:if="{{mode === 'build' && !sec && !focus && tour === null}}" style="top:{{topCard}}px">
+  <!-- 营造阶段卡。剖面图铺开时这三张卡一概让位，不然和剖面挤在一起；
+       28 道券砌完（buildDone）就自己收走——这张卡压在左上角，
+       正好是剖面图页签那一行，留着就永远点不到那六个页签 -->
+  <view class="phase" wx:if="{{mode === 'build' && !sec && !focus && !buildDone && tour === null}}" style="top:{{topCard}}px">
     <view class="phase-name">{{phaseName}}</view>
     <view class="phase-desc">{{phaseDesc}}</view>
     <view class="bar"><view class="bar-fill" style="width:{{progressPct}}%"></view></view>
@@ -40,9 +42,9 @@
   </view>
 
   <!-- 泄洪读数。导览期间不收：第七步讲稿明说「读数卡上的数随水量变」，
-       收了就没东西可指。改挂到屏幕底部，把画面中段整片让给桥 -->
-  <view class="hud {{tour !== null ? 'hud-low' : ''}}" wx:if="{{mode === 'flood' && !sec && !focus}}"
-        style="{{tour !== null ? '' : 'top:' + topCard + 'px'}}">
+       收了就没东西可指。讲稿卡回到底部以后，读数也就回到它原来待的
+       顶部位置，画面中段整片让给桥 -->
+  <view class="hud" wx:if="{{mode === 'flood' && !sec && !focus}}" style="top:{{topCard}}px">
     <view class="hud-row">
       <view class="cell">
         <view class="cell-v">{{readout.h}}</view>
@@ -75,7 +77,7 @@
 
   <!-- 部位聚焦卡。轻点桥身落在锚点 40 px 内就飞到特写机位并弹出；
        打开时盖掉同位置的读数/阶段卡，关掉即回——两张卡不该同屏叠字 -->
-  <view class="focus" wx:if="{{focus}}" style="top:{{topCard}}px">
+  <view class="focus" wx:if="{{focus && !sec}}" style="top:{{topCard}}px">
     <view class="focus-head">
       <text class="focus-name">{{focus.name}}</text>
       <text class="focus-close" aria-role="button" bindtap="onFocusClose">收起</text>
@@ -194,11 +196,10 @@
     </block>
   </view>
 
-  <!-- 说课导览。挂在画面顶部：讲稿是这轮的主角，得占住视线。
-       抬头、右上角按钮、阶段卡在导览期间一并收起（讲稿占了顶部这一带，
-       压在底下只是叠字），泄洪读数退到屏幕底部。top 走 topTitle，
-       让开状态栏和右上角的胶囊按钮 -->
-  <view class="tour" wx:if="{{tour !== null}}" style="top:{{topTitle}}px">
+  <!-- 说课导览。讲稿卡挂在画面底部，和底部控制台同一个位置：
+       抬头、右上角按钮、阶段卡在导览期间一并收起（讲稿占了底部这一带，
+       压在顶上只是叠字），导览一开控制台就让位，讲稿顶上它的位置 -->
+  <view class="tour" wx:if="{{tour !== null}}">
     <view class="tour-head">
       <view class="tour-step">{{tourIdx + 1}} / {{tourTotal}}</view>
       <view class="tour-name">{{tourName}}</view>

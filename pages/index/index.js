@@ -390,6 +390,7 @@ Page({
     playing: true,
     speed: 1,
     progressPct: 0,
+    buildDone: false,    // 营造进度走满后阶段卡自己收起，别压在剖面图上
     phaseName: PHASES[0].name,
     phaseDesc: PHASES[0].desc,
     phaseIdx: 0,
@@ -583,7 +584,11 @@ Page({
         return
       }
       const canvas = r.node
-      const dpr = (wx.getWindowInfo ? wx.getWindowInfo().pixelRatio : 2) || 2
+      // dpr 封顶 2：iPhone 上 pixelRatio 是 3，按 3 开画布等于每帧多铺
+      // 一倍多的像素，而这些像素还要被两千多个面反复填一遍。标注字号是
+      // 设计空间算出来的，2 倍已经够清楚，省下来的是实打实的填充率
+      const raw = (wx.getWindowInfo ? wx.getWindowInfo().pixelRatio : 2) || 2
+      const dpr = Math.min(2, raw)
       const sx = r.width / this.data.cw
       const sy = r.height / this.data.ch
       canvas.width = Math.round(r.width * dpr)
@@ -595,6 +600,10 @@ Page({
       this.ctx = ctx
       this.cw = this.data.cw
       this.ch = this.data.ch
+      // 触摸坐标是设备 CSS 像素，页签、部位锚点这些命中判定用的却是设计
+      // 坐标，两者差一个缩放比。这两个数必须记下来，不记就折算不回去
+      this.sx = sx
+      this.sy = sy
       this.scene = R.createScene()
 
       // 场景只搭一次，之后每帧只做投影
@@ -2121,12 +2130,12 @@ Page({
    * 一个手指按在卡片顶上，本意是点按钮，若还照旧去转身后那座 3D 桥，
    * 就是没接住这一下。
    */
-  hitSecTab(t) {
+  hitSecTab(px, py) {
     const tabs = this._secTabs
     if (!tabs) return false
     for (let i = 0; i < tabs.length; i++) {
       const b = tabs[i]
-      if (t.x >= b.x && t.x <= b.x + b.w && t.y >= b.y && t.y <= b.y + b.h) {
+      if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) {
         if (b.key !== this.data.secTab) this.setData({ secTab: b.key })
         return true
       }
@@ -3181,6 +3190,9 @@ Page({
       const t = this.st.t
       const pct = Math.round((t / B.TOTAL) * 100)
       if (pct !== this.data.progressPct) d.progressPct = pct
+      // 砌完了就把阶段卡收走：那张卡压在左上角，剖面图铺开时正好盖住
+      // 页签那一行，讲课时它得自己消失
+      if (pct >= 100 && !this.data.buildDone) d.buildDone = true
       const pi = phaseAt(t)
       if (pi !== this.data.phaseIdx) {
         d.phaseIdx = pi
@@ -3269,11 +3281,27 @@ Page({
 
   // ==================== 交互 ====================
 
+  /**
+   * 设备 CSS 像素 → 设计坐标。
+   *
+   * canvas 的 CSS 尺寸是设备的点（手机 390 pt），设计空间却是 390/k pt
+   * （iPad 上 631 pt），中间差一个缩放比 k。页签和部位锚点都是按设计
+   * 坐标画出来的，触摸坐标不折算过去，命中框就整体偏出去——iPad 上偏得
+   * 足有半屏宽，右边几个页签永远点不中；手机上 k=1，正好不偏，
+   * 所以这个毛病只在平板上露出来。
+   */
+  toDesign(x, y) {
+    return { x: x / (this.sx || 1), y: y / (this.sy || 1) }
+  },
+
   onTouchStart(e) {
     const ts = e.touches
     // 剖面卡片顶上的页签是画在 canvas 里的，够不着 bindtap，只能在这里
     // 认领。认领了就直接返回：这一下是点按钮，不是转桥
-    if (this.data.sec && ts.length === 1 && this.hitSecTab(ts[0])) return
+    if (this.data.sec && ts.length === 1) {
+      const p0 = this.toDesign(ts[0].x, ts[0].y)
+      if (this.hitSecTab(p0.x, p0.y)) return
+    }
     this.anim = null
     // 新手势接管：上一把的惯性停掉，速度采样归零重来
     this.spin = null
@@ -3285,12 +3313,13 @@ Page({
       this.pinch0 = this.touchDist(ts)
       this.zoom0 = this.cam.zoom
     } else {
-      this.pt = { x: ts[0].x, y: ts[0].y }
+      const p = this.toDesign(ts[0].x, ts[0].y)
+      this.pt = { x: p.x, y: p.y }
       this.yaw0 = this.cam.yaw
       this.pitch0 = this.cam.pitch
       this.pinch0 = 0
       // tap 判定：按下位置与时刻记下来，onTouchEnd 里没怎么动才算点
-      this.tap0 = { x: ts[0].x, y: ts[0].y, at: Date.now() }
+      this.tap0 = { x: p.x, y: p.y, at: Date.now() }
     }
   },
 
@@ -3303,8 +3332,11 @@ Page({
       return
     }
     if (!this.pt || !ts.length) return
-    const dx = ts[0].x - this.pt.x
-    const dy = ts[0].y - this.pt.y
+    // 拖动量也得在设计坐标里算：转桥的速度是"每设计像素转多少度"，
+    // 不折算的话 iPad 上同样的手指行程只转了手机上的 1/k
+    const cur = this.toDesign(ts[0].x, ts[0].y)
+    const dx = cur.x - this.pt.x
+    const dy = cur.y - this.pt.y
     this.cam.yaw = this.yaw0 - dx * 0.006
     this.cam.pitch = clamp(this.pitch0 + dy * 0.005, -0.45, 0.95)
     this.clampOrbit()
@@ -3312,13 +3344,13 @@ Page({
     const now = Date.now()
     if (this.moveAt) {
       const mdt = Math.max(0.008, (now - this.moveAt) / 1000)
-      const ivy = (-(ts[0].x - this.lastX) * 0.006) / mdt
-      const ivp = ((ts[0].y - this.lastY) * 0.005) / mdt
+      const ivy = (-(cur.x - this.lastX) * 0.006) / mdt
+      const ivp = ((cur.y - this.lastY) * 0.005) / mdt
       this.vyaw = 0.7 * this.vyaw + 0.3 * ivy
       this.vpitch = 0.7 * this.vpitch + 0.3 * ivp
     }
-    this.lastX = ts[0].x
-    this.lastY = ts[0].y
+    this.lastX = cur.x
+    this.lastY = cur.y
     this.moveAt = now
   },
 
@@ -3336,9 +3368,10 @@ Page({
     }
     if (!t0 || !e || !e.changedTouches || !e.changedTouches.length) return
     const tt = e.changedTouches[0]
-    const dx = tt.x - t0.x, dy = tt.y - t0.y
+    const tp = this.toDesign(tt.x, tt.y)
+    const dx = tp.x - t0.x, dy = tp.y - t0.y
     if (dx * dx + dy * dy > 81 || Date.now() - t0.at > 420) return
-    this.pickPart(tt.x, tt.y)
+    this.pickPart(tp.x, tp.y)
   },
 
   touchDist(ts) {
@@ -3461,7 +3494,7 @@ Page({
       }
     } else {
       this.st.t = 0
-      this.setData({ mode, playing: true, focus: null, focusId: null })
+      this.setData({ mode, playing: true, focus: null, focusId: null, buildDone: false })
       this.applyView('build')
     }
   },
@@ -3469,15 +3502,17 @@ Page({
   onTogglePlay() {
     if (this.data.mode !== 'build') return
     const playing = !this.data.playing
-    if (!playing && this.st.t >= B.TOTAL) this.st.t = 0
-    this.setData({ playing })
+    const d = { playing: playing }
+    // 进度已满再按播放就是从头再来：阶段卡也得跟着重新出来
+    if (!playing && this.st.t >= B.TOTAL) { this.st.t = 0; d.buildDone = false }
+    this.setData(d)
   },
 
-  onRestart() { this.st.t = 0; this.setData({ playing: true }) },
+  onRestart() { this.st.t = 0; this.setData({ playing: true, buildDone: false }) },
   onSeek(e) {
     const v = e.detail.value / 1000
     this.st.t = v * B.TOTAL
-    this.setData({ playing: false })
+    this.setData({ playing: false, buildDone: false })
   },
   onSpeed(e) {
     const map = [0.5, 1, 1.6, 2.4]
@@ -3540,7 +3575,9 @@ Page({
   /** 纵剖面图和「数据出处」是同一类浮层，两张卡片同时铺开会打架，互斥 */
   onToggleSec() {
     const sec = !this.data.sec
-    this.setData({ sec: sec, srcOpen: sec ? false : this.data.srcOpen })
+    // 聚焦卡和剖面图卡都在左上角那一带，开剖面图就得先把聚焦收掉，
+    // 否则那张卡正好盖住页签那一行，右边几个页签点不到
+    this.setData({ sec: sec, srcOpen: sec ? false : this.data.srcOpen, focus: null, focusId: null })
   },
 
   /**

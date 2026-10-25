@@ -95,7 +95,7 @@ function createScene() {
     w: 0, h: 0, cx: 0, cy: 0,
     fog: null,
     list: [],
-    stats: { faces: 0, drawn: 0, culled: 0, clipped: 0 }
+    stats: { faces: 0, drawn: 0, culled: 0, clipped: 0, off: 0 }
   }
 }
 
@@ -114,6 +114,7 @@ function beginFrame(sc, cam) {
   sc.stats.drawn = 0
   sc.stats.culled = 0
   sc.stats.clipped = 0
+  sc.stats.off = 0
 }
 
 /** 把一个世界坐标点投影到屏幕，返回 [sx, sy, depth]；不可见返回 null */
@@ -482,12 +483,31 @@ function pushTri(sc, p0, p1, p2, r, g, b, alpha) {
 
 function byDepth(a, b) { return b.d - a.d }
 
-function drawList(ctx, list) {
+function drawList(ctx, list, vw, vh, sc) {
   // 圆头端帽：每条边是独立的一段，平头会在石头转角处留下一丝缝
   ctx.lineCap = 'round'
+  // 画幅外的面直接不填。相机拉远时地形与水面铺到 460 m 远，
+  // 其中大半落在画幅外——投影、排序都做完了，填进去只会被画布裁掉，
+  // 纯属白填。逐面算一次包围盒，跳过这几十个百分点，帧时间就下来了。
+  // vw/vh 是设计空间的画幅尺寸；拿不到就不裁（照旧全画）
+  const cut = vw > 0 && vh > 0
   for (let i = 0; i < list.length; i++) {
     const rec = list[i]
     const p = rec.p
+    if (cut) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+      for (let k = 0; k < p.length; k += 2) {
+        const X = p[k], Y = p[k + 1]
+        if (X < minX) minX = X
+        if (X > maxX) maxX = X
+        if (Y < minY) minY = Y
+        if (Y > maxY) maxY = Y
+      }
+      if (maxX < 0 || minX > vw || maxY < 0 || minY > vh) {
+        sc.stats.off++
+        continue
+      }
+    }
     ctx.fillStyle = rec.s
     if (rec.a !== 1) ctx.globalAlpha = rec.a
     ctx.beginPath()
@@ -534,7 +554,7 @@ function drawList(ctx, list) {
  */
 function flush(ctx, sc) {
   sc.list.sort(byDepth)
-  drawList(ctx, sc.list)
+  drawList(ctx, sc.list, sc.w, sc.h, sc)
 }
 
 module.exports = {
