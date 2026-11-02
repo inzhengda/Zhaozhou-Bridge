@@ -248,6 +248,7 @@ function main() {
       `${shot.name.padEnd(16)} ${shot.note.padEnd(34)}` +
       ` 面 ${String(faces.faces).padStart(6)} 画 ${String(faces.drawn).padStart(6)}` +
       ` 剔 ${String(faces.culled).padStart(6)} 裁 ${String(faces.clipped).padStart(5)}` +
+      ` 画外 ${String(faces.off || 0).padStart(6)}` +
       `  ${(svg.length / 1024).toFixed(0)} KB  ${Date.now() - t0} ms`
     )
   }
